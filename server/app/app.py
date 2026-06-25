@@ -8,7 +8,7 @@ import time
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Tuple
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
@@ -61,7 +61,7 @@ def save_job(job_id: str, data: Dict[str, Any]) -> None:
     )
 
 
-def load_job(job_id: str) -> dict[str, Any]:
+def load_job(job_id: str) -> Dict[str, Any]:
     path = job_file(job_id)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Job not found")
@@ -89,7 +89,7 @@ def safe_extract(zip_path: Path, dest_dir: Path) -> None:
 
 
 def find_project_root(workspace: Path) -> Path:
-    candidates: list[tuple[int, Path]] = []
+    candidates: List[Tuple[int, Path]] = []
 
     for cmake in workspace.rglob("CMakeLists.txt"):
         project_dir = cmake.parent
@@ -107,7 +107,7 @@ def find_project_root(workspace: Path) -> Path:
     return candidates[0][1]
 
 
-def run_command(command: list[str], log_path: Path) -> None:
+def run_command(command: List[str], log_path: Path) -> None:
     with log_path.open("a", encoding="utf-8") as log:
         log.write("\n")
         log.write("========== RUN COMMAND ==========\n")
@@ -244,7 +244,7 @@ def build_worker(
 
 
 @app.get("/")
-def index() -> dict[str, str]:
+def index() -> Dict[str, str]:
     return {
         "name": "ESP Remote Build Server",
         "docs": "/docs",
