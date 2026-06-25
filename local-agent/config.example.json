@@ -1,0 +1,13 @@
+{
+  "remote_build_url": "http://your-server:8000/api/build/upload",
+  "default_project_name": "ESP32_S3_wifi_ble_hub",
+  "default_idf_image": "espressif/idf:v6.0.1",
+  "default_target": "esp32s3",
+  "host": "127.0.0.1",
+  "port": 8765,
+  "allowed_origins": [
+    "http://your-server:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000"
+  ]
+}

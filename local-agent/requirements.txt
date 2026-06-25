@@ -1,0 +1,6 @@
+esptool>=4.8
+fastapi>=0.110
+pydantic>=2.6
+pyserial>=3.5
+requests>=2.31
+uvicorn[standard]>=0.27

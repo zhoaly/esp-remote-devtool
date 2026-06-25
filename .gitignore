@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment config
+.env
+*.env
+config.json
+
+# Server runtime data
+server/data/uploads/*
+server/data/workspaces/*
+server/data/artifacts/*
+server/data/logs/*
+server/data/jobs/*
+
+!server/data/.gitkeep
+!server/data/uploads/.gitkeep
+!server/data/workspaces/.gitkeep
+!server/data/artifacts/.gitkeep
+!server/data/logs/.gitkeep
+!server/data/jobs/.gitkeep
+
+# Local agent build output
+local-agent/build/
+local-agent/dist/
+local-agent/release/
+local-agent/*.spec
+
+# Release output
+release/*
+!release/.gitkeep
+
+# Firmware / archives
+*.bin
+*.elf
+*.map
+*.zip
+*.tar.gz
+*.7z
+
+# Logs
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Import scratch files
+_import/
