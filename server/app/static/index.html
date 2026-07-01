@@ -407,17 +407,12 @@
         <section class="panel">
             <h2>3. Flash Setup</h2>
             <div class="grid">
-                <div class="field">
+                <div class="field full">
                     <label for="serialPort">串口选择</label>
                     <select id="serialPort">
-                        <option value="COM7">COM7</option>
+                        <option value="">请先刷新串口</option>
                     </select>
-                    <div class="hint">点击刷新串口后，会由本机 Agent 枚举可用 COM 口。</div>
-                </div>
-                <div class="field">
-                    <label for="manualPort">手动指定串口</label>
-                    <input id="manualPort" value="COM7">
-                    <div class="hint">如果自动枚举失败，可以手动输入例如 <code>COM7</code>。</div>
+                    <div class="hint">点击刷新串口后，会由本机 Agent 枚举可用 COM 口；烧录时只使用这里选中的串口。</div>
                 </div>
                 <div class="field">
                     <label for="flashBaud">烧录波特率</label>
@@ -712,7 +707,6 @@
 
         async function refreshSerialPorts() {
             const select = document.getElementById("serialPort");
-            const manual = document.getElementById("manualPort");
 
             try {
                 setFlashStatus("正在从本地 Agent 获取串口列表...");
@@ -726,10 +720,10 @@
 
                 if (!data.ports || data.ports.length === 0) {
                     const opt = document.createElement("option");
-                    opt.value = manual.value || "COM7";
-                    opt.textContent = "未发现串口，使用手动输入";
+                    opt.value = "";
+                    opt.textContent = "未发现可用串口";
                     select.appendChild(opt);
-                    setFlashStatus("未自动发现串口，请确认设备连接，或手动输入 COM 口。", "failed");
+                    setFlashStatus("未自动发现串口，请确认设备连接后重新刷新串口。", "failed");
                     return;
                 }
 
@@ -742,7 +736,6 @@
 
                 const defaultPort = data.default_port || data.ports[0].device;
                 select.value = defaultPort;
-                manual.value = defaultPort;
                 setFlashStatus(`串口刷新成功，当前选择: ${defaultPort}`, "success");
             } catch (err) {
                 setFlashStatus([
@@ -763,9 +756,12 @@
             const flashBtn = document.getElementById("flashBtn");
             flashBtn.disabled = true;
 
-            const selectedPort = document.getElementById("serialPort").value;
-            const manualPort = document.getElementById("manualPort").value.trim();
-            const comPort = manualPort || selectedPort;
+            const comPort = document.getElementById("serialPort").value.trim();
+            if (!comPort) {
+                setFlashStatus("请选择一个可用串口后再烧录。", "failed");
+                flashBtn.disabled = false;
+                return;
+            }
             const baud = parseInt(document.getElementById("flashBaud").value || "460800", 10);
             const chip = document.getElementById("flashChip").value.trim() || "esp32s3";
 
