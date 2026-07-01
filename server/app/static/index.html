@@ -354,15 +354,30 @@
             <h2>1. Project Setup</h2>
             <div class="grid">
                 <div class="field full">
+                    <label for="sourceMode">源码来源</label>
+                    <select id="sourceMode" onchange="handleSourceModeChange()">
+                        <option value="upload_zip" selected>本地上传构建</option>
+                        <option value="remote_workspace">远端固定工作区构建</option>
+                    </select>
+                    <div class="hint">本地上传构建会通过 Local Agent 压缩并上传 Windows 工程；远端固定工作区构建会直接使用服务器白名单中的工程目录。</div>
+                </div>
+                <div class="field full" id="remoteWorkspaceField" style="display: none;">
+                    <label for="remoteWorkspace">远端工作区</label>
+                    <select id="remoteWorkspace">
+                        <option value="">正在加载远端工作区...</option>
+                    </select>
+                    <div class="hint" id="remoteWorkspaceHint">页面加载时会从远端 Server 的 /api/workspaces 读取可用工作区。</div>
+                </div>
+                <div class="field full local-upload-field" id="localProjectPathField">
                     <label for="projectPath">Windows 本地工程路径</label>
                     <input id="projectPath" value="C:\path\to\your\esp-idf-project">
                     <div class="hint">这个路径只由本机 Agent 读取。远端服务器不会直接访问你的 Windows 文件系统。</div>
                 </div>
-                <div class="field">
+                <div class="field local-upload-field">
                     <label for="projectName">项目名</label>
                     <input id="projectName" value="ESP32_S3_wifi_ble_hub">
                 </div>
-                <div class="field">
+                <div class="field local-upload-field">
                     <label for="target">目标芯片</label>
                     <select id="target">
                         <option value="esp32s3" selected>esp32s3</option>
@@ -372,7 +387,7 @@
                         <option value="esp32s2">esp32s2</option>
                     </select>
                 </div>
-                <div class="field full">
+                <div class="field full local-upload-field">
                     <label for="idfImage">ESP-IDF Docker 镜像</label>
                     <input id="idfImage" value="espressif/idf:v6.0.1">
                 </div>
@@ -439,9 +454,66 @@
         let currentJobId = null;
         let currentDownloadUrl = null;
         let pollTimer = null;
+        let remoteWorkspaces = [];
 
         document.getElementById("remoteBaseText").textContent = REMOTE_BASE + "/ui";
         document.getElementById("remoteHostCard").textContent = REMOTE_BASE;
+        loadWorkspaces();
+        handleSourceModeChange();
+
+
+        function handleSourceModeChange() {
+            const sourceMode = document.getElementById("sourceMode").value;
+            const isRemoteWorkspace = sourceMode === "remote_workspace";
+            document.getElementById("remoteWorkspaceField").style.display = isRemoteWorkspace ? "grid" : "none";
+            document.querySelectorAll(".local-upload-field").forEach((field) => {
+                field.style.display = isRemoteWorkspace ? "none" : "grid";
+            });
+        }
+
+        function renderWorkspaces(workspaces) {
+            const select = document.getElementById("remoteWorkspace");
+            const hint = document.getElementById("remoteWorkspaceHint");
+            select.innerHTML = "";
+
+            if (!workspaces.length) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "未配置可用远端工作区";
+                select.appendChild(opt);
+                hint.textContent = "远端 Server 当前没有返回可用工作区，请检查 server/config/workspaces.json。";
+                return;
+            }
+
+            workspaces.forEach((workspace) => {
+                const opt = document.createElement("option");
+                opt.value = workspace.workspace_id;
+                opt.textContent = `${workspace.display_name || workspace.workspace_id} (${workspace.target || "unknown"})`;
+                opt.dataset.projectName = workspace.project_name || "";
+                opt.dataset.idfImage = workspace.idf_image || "";
+                opt.dataset.target = workspace.target || "";
+                select.appendChild(opt);
+            });
+
+            hint.textContent = "远端固定工作区构建会直接使用服务器白名单路径，不会读取 Windows 本地工程路径。";
+        }
+
+        async function loadWorkspaces() {
+            try {
+                const resp = await fetch(REMOTE_BASE + "/api/workspaces");
+                if (!resp.ok) {
+                    throw new Error(await parseErrorResponse(resp));
+                }
+
+                const data = await resp.json();
+                remoteWorkspaces = data.workspaces || [];
+                renderWorkspaces(remoteWorkspaces);
+            } catch (err) {
+                remoteWorkspaces = [];
+                renderWorkspaces([]);
+                document.getElementById("remoteWorkspaceHint").textContent = `加载远端工作区失败: ${err.message}`;
+            }
+        }
 
         function setBuildStatus(text, type = "") {
             const box = document.getElementById("buildStatusBox");
@@ -500,6 +572,7 @@
         async function startBuild() {
             const startBtn = document.getElementById("startBtn");
             const flashBtn = document.getElementById("flashBtn");
+            const sourceMode = document.getElementById("sourceMode").value;
 
             startBtn.disabled = true;
             flashBtn.disabled = true;
@@ -508,40 +581,66 @@
             currentJobId = null;
             currentDownloadUrl = null;
             document.getElementById("jobIdCard").textContent = "starting";
-            document.getElementById("buildLogBox").textContent = "准备调用本地 Agent...";
             document.getElementById("flashLogBox").textContent = "暂无烧录日志。";
-            setBuildStatus("正在请求本地 Agent 压缩源码并上传到远端服务器...");
             setFlashStatus("等待构建成功后烧录。");
             setLinks(null, null);
 
-            const payload = {
-                project_path: document.getElementById("projectPath").value.trim(),
-                project_name: document.getElementById("projectName").value.trim(),
-                idf_image: document.getElementById("idfImage").value.trim(),
-                target: document.getElementById("target").value
-            };
-
             try {
-                const resp = await fetch(LOCAL_AGENT + "/api/build_from_path", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
+                let resp;
+                let successMessage;
+
+                if (sourceMode === "remote_workspace") {
+                    const workspaceId = document.getElementById("remoteWorkspace").value;
+                    if (!workspaceId) {
+                        throw new Error("请选择可用的远端工作区");
+                    }
+
+                    document.getElementById("buildLogBox").textContent = "准备调用远端工作区构建接口...";
+                    setBuildStatus("正在请求远端 Server 直接从固定工作区构建...");
+
+                    resp = await fetch(REMOTE_BASE + "/api/build/workspace", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ workspace_id: workspaceId })
+                    });
+                    successMessage = "远端工作区构建已启动，开始轮询远端构建状态...";
+                } else {
+                    document.getElementById("buildLogBox").textContent = "准备调用本地 Agent...";
+                    setBuildStatus("正在请求本地 Agent 压缩源码并上传到远端服务器...");
+
+                    const payload = {
+                        project_path: document.getElementById("projectPath").value.trim(),
+                        project_name: document.getElementById("projectName").value.trim(),
+                        idf_image: document.getElementById("idfImage").value.trim(),
+                        target: document.getElementById("target").value
+                    };
+
+                    resp = await fetch(LOCAL_AGENT + "/api/build_from_path", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    successMessage = "源码已上传，开始轮询远端构建状态...";
+                }
 
                 if (!resp.ok) {
                     throw new Error(await parseErrorResponse(resp));
                 }
 
                 const data = await resp.json();
-                currentJobId = data.remote_response?.job_id;
+                currentJobId = sourceMode === "remote_workspace"
+                    ? data.job_id
+                    : data.remote_response?.job_id;
 
                 if (!currentJobId) {
-                    throw new Error("本地 Agent 返回中缺少 remote_response.job_id");
+                    throw new Error(sourceMode === "remote_workspace"
+                        ? "远端 Server 返回中缺少 job_id"
+                        : "本地 Agent 返回中缺少 remote_response.job_id");
                 }
 
                 document.getElementById("jobIdCard").textContent = currentJobId;
                 setBuildStatus([
-                    "源码已上传，开始轮询远端构建状态...",
+                    successMessage,
                     `Job ID: ${currentJobId}`
                 ].join("\n"));
 
