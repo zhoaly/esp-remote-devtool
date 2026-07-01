@@ -25,6 +25,8 @@ ARTIFACT_DIR = DATA_DIR / "artifacts"
 LOG_DIR = DATA_DIR / "logs"
 JOB_DIR = DATA_DIR / "jobs"
 STATIC_DIR = BASE_DIR / "app" / "static"
+CONFIG_DIR = BASE_DIR / "config"
+WORKSPACES_CONFIG = CONFIG_DIR / "workspaces.json"
 
 BUILD_SCRIPT = BASE_DIR / "scripts" / "build_uploaded_project.sh"
 PACKAGE_SCRIPT = BASE_DIR / "scripts" / "package_firmware.sh"
@@ -135,6 +137,101 @@ def run_command(command: List[str], log_path: Path) -> None:
             raise RuntimeError(f"Command failed with exit code {return_code}")
 
 
+
+def load_workspaces_config() -> Dict[str, Dict[str, Any]]:
+    if not WORKSPACES_CONFIG.exists():
+        raise HTTPException(status_code=500, detail="Workspaces config not found")
+
+    try:
+        config = json.loads(WORKSPACES_CONFIG.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail=f"Invalid workspaces config JSON: {exc}") from exc
+
+    workspaces = config.get("workspaces")
+    if workspaces is None:
+        raise HTTPException(status_code=500, detail="Workspaces config missing 'workspaces'")
+
+    if not isinstance(workspaces, dict):
+        raise HTTPException(status_code=500, detail="Workspaces config 'workspaces' must be an object")
+
+    return workspaces
+
+
+def get_workspace_config(workspace_id: str) -> Dict[str, Any]:
+    if not workspace_id:
+        raise HTTPException(status_code=400, detail="Missing workspace_id")
+
+    workspaces = load_workspaces_config()
+    if workspace_id not in workspaces:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    cfg = workspaces[workspace_id]
+    if not isinstance(cfg, dict):
+        raise HTTPException(status_code=500, detail=f"Workspace config must be an object: {workspace_id}")
+
+    for field in ("path", "project_name", "target", "idf_image"):
+        if not cfg.get(field):
+            raise HTTPException(status_code=500, detail=f"Workspace config missing '{field}': {workspace_id}")
+
+    return cfg
+
+
+def resolve_workspace_project_dir(workspace_path: str) -> Path:
+    workspace = Path(workspace_path).expanduser().resolve()
+
+    if not workspace.exists():
+        raise RuntimeError(f"Workspace path not found: {workspace}")
+
+    if not workspace.is_dir():
+        raise RuntimeError(f"Workspace path is not a directory: {workspace}")
+
+    has_cmake = (workspace / "CMakeLists.txt").is_file()
+    has_main_or_components = (workspace / "main").is_dir() or (workspace / "components").is_dir()
+    if has_cmake and has_main_or_components:
+        return workspace
+
+    return find_project_root(workspace)
+
+
+def package_firmware_and_update_job(job_id: str, project_dir: Path, project_name: str) -> None:
+    log_path = log_file(job_id)
+
+    update_job(job_id, status="packaging", message="Packaging firmware")
+
+    package_output = subprocess.check_output(
+        [
+            str(PACKAGE_SCRIPT),
+            str(project_dir),
+            str(ARTIFACT_DIR),
+            project_name,
+            job_id,
+        ],
+        text=True,
+        stderr=subprocess.STDOUT,
+    )
+
+    with log_path.open("a", encoding="utf-8") as log:
+        log.write("\n========== PACKAGE OUTPUT ==========\n")
+        log.write(package_output)
+        log.write("\n====================================\n")
+
+    artifact_path = Path(package_output.strip().splitlines()[-1])
+
+    if not artifact_path.exists():
+        raise RuntimeError(f"Artifact not found: {artifact_path}")
+
+    update_job(
+        job_id,
+        status="success",
+        message="Build success",
+        artifact=str(artifact_path),
+        artifact_name=artifact_path.name,
+        download_url=f"/api/artifacts/{artifact_path.name}",
+        log_url=f"/api/logs/{job_id}",
+        finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+    )
+
+
 def build_worker(
     job_id: str,
     upload_path: Path,
@@ -161,6 +258,7 @@ def build_worker(
 
             with log_path.open("a", encoding="utf-8") as log:
                 log.write(f"Job ID      : {job_id}\n")
+                log.write("Source mode : upload_zip\n")
                 log.write(f"Upload path : {upload_path}\n")
                 log.write(f"Workspace   : {workspace}\n")
                 log.write(f"Project name: {project_name}\n")
@@ -190,40 +288,80 @@ def build_worker(
                 log_path,
             )
 
-            update_job(job_id, status="packaging", message="Packaging firmware")
+            package_firmware_and_update_job(job_id, project_dir, project_name)
 
-            package_output = subprocess.check_output(
-                [
-                    str(PACKAGE_SCRIPT),
-                    str(project_dir),
-                    str(ARTIFACT_DIR),
-                    project_name,
-                    job_id,
-                ],
-                text=True,
-                stderr=subprocess.STDOUT,
+        finally:
+            BUILD_LOCK.release()
+
+    except Exception as exc:
+        update_job(
+            job_id,
+            status="failed",
+            message=str(exc),
+            log_url=f"/api/logs/{job_id}",
+            finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+        )
+
+        with log_path.open("a", encoding="utf-8") as log:
+            log.write("\n========== BUILD FAILED ==========\n")
+            log.write(str(exc) + "\n")
+            log.write("==================================\n")
+
+
+def workspace_build_worker(
+    job_id: str,
+    workspace_id: str,
+    workspace_path: str,
+    project_name: str,
+    idf_image: str,
+    target: str,
+) -> None:
+    log_path = log_file(job_id)
+
+    try:
+        acquired = BUILD_LOCK.acquire(blocking=False)
+        if not acquired:
+            update_job(
+                job_id,
+                status="failed",
+                message="Another build is running. Please retry later.",
+                finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
             )
+            return
+
+        try:
+            update_job(job_id, status="checking", message="Checking remote workspace")
 
             with log_path.open("a", encoding="utf-8") as log:
-                log.write("\n========== PACKAGE OUTPUT ==========\n")
-                log.write(package_output)
-                log.write("\n====================================\n")
+                log.write(f"Job ID        : {job_id}\n")
+                log.write("Source mode   : remote_workspace\n")
+                log.write(f"Workspace ID  : {workspace_id}\n")
+                log.write(f"Workspace path: {workspace_path}\n")
+                log.write(f"Project name  : {project_name}\n")
+                log.write(f"IDF image     : {idf_image}\n")
+                log.write(f"Target        : {target}\n")
 
-            artifact_path = Path(package_output.strip().splitlines()[-1])
-
-            if not artifact_path.exists():
-                raise RuntimeError(f"Artifact not found: {artifact_path}")
+            project_dir = resolve_workspace_project_dir(workspace_path)
 
             update_job(
                 job_id,
-                status="success",
-                message="Build success",
-                artifact=str(artifact_path),
-                artifact_name=artifact_path.name,
-                download_url=f"/api/artifacts/{artifact_path.name}",
-                log_url=f"/api/logs/{job_id}",
-                finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+                status="building",
+                message="Docker build is running from remote workspace",
+                project_dir=str(project_dir),
             )
+
+            run_command(
+                [
+                    str(BUILD_SCRIPT),
+                    str(project_dir),
+                    project_name,
+                    idf_image,
+                    target,
+                ],
+                log_path,
+            )
+
+            package_firmware_and_update_job(job_id, project_dir, project_name)
 
         finally:
             BUILD_LOCK.release()
@@ -263,6 +401,77 @@ def ui() -> FileResponse:
         raise HTTPException(status_code=404, detail="UI page not found")
 
     return FileResponse(index_file, headers={"Cache-Control": "no-store, max-age=0"})
+
+
+@app.get("/api/workspaces")
+def list_workspaces():
+    workspaces = load_workspaces_config()
+    items = []
+
+    for workspace_id, cfg in workspaces.items():
+        if not isinstance(cfg, dict):
+            continue
+
+        items.append(
+            {
+                "workspace_id": workspace_id,
+                "display_name": cfg.get("display_name", workspace_id),
+                "project_type": cfg.get("project_type", "esp_idf"),
+                "project_name": cfg.get("project_name"),
+                "target": cfg.get("target"),
+                "idf_image": cfg.get("idf_image"),
+            }
+        )
+
+    return {"workspaces": items}
+
+
+@app.post("/api/build/workspace")
+async def build_from_workspace(payload: Dict[str, Any]):
+    workspace_id = payload.get("workspace_id")
+    cfg = get_workspace_config(workspace_id)
+
+    workspace_path = cfg["path"]
+    project_name = cfg["project_name"]
+    target = cfg["target"]
+    idf_image = cfg["idf_image"]
+    job_id = make_job_id()
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    save_job(
+        job_id,
+        {
+            "status": "queued",
+            "source_mode": "remote_workspace",
+            "message": "Remote workspace build queued",
+            "workspace_id": workspace_id,
+            "workspace_path": workspace_path,
+            "project_name": project_name,
+            "target": target,
+            "idf_image": idf_image,
+            "log": str(log_file(job_id)),
+            "created_at": now,
+            "finished_at": None,
+            "artifact": None,
+            "artifact_name": None,
+            "download_url": None,
+            "log_url": f"/api/logs/{job_id}",
+        },
+    )
+
+    worker = threading.Thread(
+        target=workspace_build_worker,
+        args=(job_id, workspace_id, workspace_path, project_name, idf_image, target),
+        daemon=True,
+    )
+    worker.start()
+
+    return {
+        "job_id": job_id,
+        "status": "running",
+        "status_url": f"/api/jobs/{job_id}",
+        "log_url": f"/api/logs/{job_id}",
+    }
 
 
 @app.post("/api/build/upload")
@@ -308,6 +517,7 @@ async def build_from_upload(
         job_id,
         {
             "status": "uploaded",
+            "source_mode": "upload_zip",
             "message": "Upload completed",
             "project_name": project_name,
             "target": target,

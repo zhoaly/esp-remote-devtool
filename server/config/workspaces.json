@@ -1,0 +1,12 @@
+{
+  "workspaces": {
+    "esp32_s3_wifi_ble_hub": {
+      "display_name": "ESP32-S3 WiFi BLE Hub",
+      "path": "~/projects/ESP32_S3_wifi_ble_hub",
+      "project_type": "esp_idf",
+      "project_name": "ESP32_S3_wifi_ble_hub",
+      "target": "esp32s3",
+      "idf_image": "espressif/idf:v6.0.1"
+    }
+  }
+}
