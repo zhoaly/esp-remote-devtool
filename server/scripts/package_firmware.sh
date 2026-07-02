@@ -58,7 +58,23 @@ python -m esptool --chip esp32s3 -p COM5 -b 460800 --before default-reset --afte
 Replace COM5 with your actual serial port.
 EOF
 
+APP_BIN_NAME="$(basename "$APP_BIN")"
+APP_BIN_SIZE="$(stat -c%s "$APP_BIN")"
+APP_BIN_SHA256="$(sha256sum "$APP_BIN" | awk '{print $1}')"
+
+cat > build/ota_info.json <<EOF
+{
+  "project": "${PROJECT_NAME}",
+  "chip": "esp32s3",
+  "app_bin": "${APP_BIN_NAME}",
+  "size": ${APP_BIN_SIZE},
+  "sha256": "${APP_BIN_SHA256}",
+  "job_id": "${JOB_ID}"
+}
+EOF
+
 sha256sum build/firmware_merged.bin > build/firmware_merged.sha256
+sha256sum "$APP_BIN" > "build/${APP_BIN_NAME}.sha256"
 
 zip -q -j "$ZIP_PATH" \
     build/firmware_merged.bin \
@@ -66,6 +82,8 @@ zip -q -j "$ZIP_PATH" \
     build/bootloader/bootloader.bin \
     build/partition_table/partition-table.bin \
     "$APP_BIN" \
+    "build/${APP_BIN_NAME}.sha256" \
+    build/ota_info.json \
     build/flasher_args.json \
     build/project_description.json \
     build/flash_readme.txt

@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
+import shutil
 import subprocess
 import threading
 import time
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 
 
@@ -22,6 +25,9 @@ DATA_DIR = BASE_DIR / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 WORKSPACE_DIR = DATA_DIR / "workspaces"
 ARTIFACT_DIR = DATA_DIR / "artifacts"
+OTA_DIR = DATA_DIR / "ota"
+OTA_RELEASE_DIR = OTA_DIR / "releases"
+OTA_CHANNEL_DIR = OTA_DIR / "channels"
 LOG_DIR = DATA_DIR / "logs"
 JOB_DIR = DATA_DIR / "jobs"
 STATIC_DIR = BASE_DIR / "app" / "static"
@@ -35,11 +41,13 @@ DEFAULT_PROJECT_NAME = os.getenv("ESP_DEFAULT_PROJECT_NAME", "ESP32_S3_wifi_ble_
 DEFAULT_IDF_IMAGE = os.getenv("ESP_DEFAULT_IDF_IMAGE", "espressif/idf:v6.0.1")
 DEFAULT_TARGET = os.getenv("ESP_DEFAULT_TARGET", "esp32s3")
 MAX_UPLOAD_SIZE = int(os.getenv("ESP_MAX_UPLOAD_SIZE_MB", "200")) * 1024 * 1024
+OTA_APP_PARTITION_SIZE = int(os.getenv("ESP_OTA_APP_PARTITION_SIZE", str(6 * 1024 * 1024)))
+VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 BUILD_LOCK = threading.Lock()
 
 
-for directory in (UPLOAD_DIR, WORKSPACE_DIR, ARTIFACT_DIR, LOG_DIR, JOB_DIR):
+for directory in (UPLOAD_DIR, WORKSPACE_DIR, ARTIFACT_DIR, OTA_RELEASE_DIR, OTA_CHANNEL_DIR, LOG_DIR, JOB_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -138,6 +146,81 @@ def run_command(command: List[str], log_path: Path) -> None:
 
 
 
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fp:
+        for chunk in iter(lambda: fp.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def safe_name(value: str, field: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", value or ""):
+        raise HTTPException(status_code=400, detail=f"Invalid {field}")
+    return value
+
+
+def parse_semver(version: str) -> Tuple[int, int, int]:
+    if not VERSION_RE.fullmatch(version or ""):
+        raise HTTPException(status_code=400, detail="version must be x.y.z")
+    return tuple(int(part) for part in version.split("."))  # type: ignore[return-value]
+
+
+def absolute_url(request: Request, path: str) -> str:
+    return str(request.url_for("index")).rstrip("/") + path
+
+
+def read_project_version(project_dir: Path) -> Optional[str]:
+    desc = project_dir / "build" / "project_description.json"
+    if not desc.exists():
+        return None
+    try:
+        data = json.loads(desc.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    version = data.get("version") or data.get("project_version") or data.get("app_version")
+    return str(version) if version else None
+
+
+def find_app_bin(project_dir: Path) -> Path:
+    build_dir = project_dir / "build"
+    candidates = sorted(
+        p for p in build_dir.glob("*.bin")
+        if p.name not in {"firmware_merged.bin"} and p.is_file()
+    )
+    if not candidates:
+        raise RuntimeError("app bin not found in build/")
+    return candidates[0]
+
+
+def collect_ota_build_info(job_id: str, project_dir: Path, project_name: str, target: str) -> Dict[str, Any]:
+    app_bin = find_app_bin(project_dir)
+    app_size = app_bin.stat().st_size
+    app_sha256 = sha256_file(app_bin)
+    return {
+        "ota_app_bin": str(app_bin),
+        "ota_app_bin_name": app_bin.name,
+        "ota_app_size": app_size,
+        "ota_app_sha256": app_sha256,
+        "ota_publishable": app_size <= OTA_APP_PARTITION_SIZE,
+        "ota_partition_limit": OTA_APP_PARTITION_SIZE,
+        "project_version": read_project_version(project_dir),
+        "project_name": project_name,
+        "target": target,
+    }
+
+
+def channel_manifest_path(channel: str, project: str, chip: str) -> Path:
+    return OTA_CHANNEL_DIR / channel / f"{project}_{chip}.json"
+
+
+def latest_channel_manifest(channel: str, project: str, chip: str) -> Optional[Dict[str, Any]]:
+    path = channel_manifest_path(channel, project, chip)
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
 def load_workspaces_config() -> Dict[str, Dict[str, Any]]:
     if not WORKSPACES_CONFIG.exists():
         raise HTTPException(status_code=500, detail="Workspaces config not found")
@@ -220,6 +303,9 @@ def package_firmware_and_update_job(job_id: str, project_dir: Path, project_name
     if not artifact_path.exists():
         raise RuntimeError(f"Artifact not found: {artifact_path}")
 
+    job = load_job(job_id)
+    ota_info = collect_ota_build_info(job_id, project_dir, project_name, job.get("target") or DEFAULT_TARGET)
+
     update_job(
         job_id,
         status="success",
@@ -228,7 +314,11 @@ def package_firmware_and_update_job(job_id: str, project_dir: Path, project_name
         artifact_name=artifact_path.name,
         download_url=f"/api/artifacts/{artifact_path.name}",
         log_url=f"/api/logs/{job_id}",
+        ota_manifest_url=None,
+        ota_firmware_url=None,
+        ota_release_id=None,
         finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+        **ota_info,
     )
 
 
@@ -576,6 +666,140 @@ def get_log(job_id: str):
 
     return path.read_text(encoding="utf-8", errors="replace")
 
+
+
+@app.post("/api/ota/publish/{job_id}")
+def publish_ota_release(job_id: str, payload: Dict[str, Any], request: Request):
+    job = load_job(job_id)
+    if job.get("status") != "success":
+        raise HTTPException(status_code=400, detail="Only successful build jobs can be published")
+    if not job.get("ota_publishable"):
+        raise HTTPException(status_code=400, detail="Build output is not OTA publishable")
+
+    project = safe_name(str(job.get("project_name") or DEFAULT_PROJECT_NAME), "project")
+    chip = safe_name(str(job.get("target") or DEFAULT_TARGET), "chip")
+    channel = safe_name(str(payload.get("channel") or "test"), "channel")
+    version = str(payload.get("version") or job.get("project_version") or "").strip()
+    min_version = str(payload.get("min_version") or "").strip()
+    force = bool(payload.get("force", False))
+    release_notes = str(payload.get("release_notes") or "")
+
+    version_tuple = parse_semver(version)
+    if min_version:
+        parse_semver(min_version)
+
+    existing = latest_channel_manifest(channel, project, chip)
+    if existing and not force:
+        existing_version = existing.get("version")
+        if existing_version and VERSION_RE.fullmatch(str(existing_version)):
+            if version_tuple <= parse_semver(str(existing_version)):
+                raise HTTPException(
+                    status_code=400,
+                    detail="version must be greater than current channel version unless force=true",
+                )
+
+    app_bin = Path(str(job.get("ota_app_bin") or ""))
+    if not app_bin.exists():
+        raise HTTPException(status_code=404, detail="app bin not found for this job")
+
+    size = app_bin.stat().st_size
+    if size > OTA_APP_PARTITION_SIZE:
+        raise HTTPException(status_code=400, detail="app bin is larger than OTA app partition limit")
+    sha256 = sha256_file(app_bin)
+    if job.get("ota_app_sha256") and sha256 != job.get("ota_app_sha256"):
+        raise HTTPException(status_code=409, detail="app bin sha256 changed since build")
+
+    release_id = make_job_id()
+    release_dir = OTA_RELEASE_DIR / release_id
+    release_dir.mkdir(parents=True, exist_ok=False)
+    release_app = release_dir / "app.bin"
+    shutil.copy2(app_bin, release_app)
+
+    firmware_path = f"/api/ota/firmware/{release_id}/app.bin"
+    manifest_path = f"/api/ota/manifest/{release_id}"
+    latest_path = f"/api/ota/latest?project={project}&chip={chip}&channel={channel}"
+    firmware_url = absolute_url(request, firmware_path)
+    manifest_url = absolute_url(request, latest_path)
+
+    manifest = {
+        "project": project,
+        "chip": chip,
+        "version": version,
+        "min_version": min_version,
+        "force": force,
+        "url": firmware_url,
+        "size": size,
+        "sha256": sha256,
+    }
+    meta = {
+        **manifest,
+        "release_id": release_id,
+        "job_id": job_id,
+        "channel": channel,
+        "release_notes": release_notes,
+        "manifest_url": manifest_url,
+        "manifest_direct_url": absolute_url(request, manifest_path),
+        "firmware_url": firmware_url,
+        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    (release_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    (release_dir / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    pointer = channel_manifest_path(channel, project, chip)
+    pointer.parent.mkdir(parents=True, exist_ok=True)
+    pointer.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    update_job(job_id, ota_manifest_url=manifest_url, ota_firmware_url=firmware_url, ota_release_id=release_id)
+    return {**meta, "manifest": manifest}
+
+
+@app.get("/api/ota/latest")
+def get_latest_ota_manifest(project: str, chip: str, channel: str = "stable"):
+    project = safe_name(project, "project")
+    chip = safe_name(chip, "chip")
+    channel = safe_name(channel, "channel")
+    manifest = latest_channel_manifest(channel, project, chip)
+    if not manifest:
+        raise HTTPException(status_code=404, detail="OTA manifest not found")
+    return manifest
+
+
+@app.get("/api/ota/manifest/{release_id}")
+def get_ota_manifest(release_id: str):
+    release_id = safe_name(release_id, "release_id")
+    path = OTA_RELEASE_DIR / release_id / "manifest.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="OTA manifest not found")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+@app.get("/api/ota/firmware/{release_id}/app.bin")
+def download_ota_firmware(release_id: str):
+    release_id = safe_name(release_id, "release_id")
+    path = OTA_RELEASE_DIR / release_id / "app.bin"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="OTA firmware not found")
+    return FileResponse(path, media_type="application/octet-stream", filename="app.bin")
+
+
+@app.get("/api/ota/releases")
+def list_ota_releases(project: Optional[str] = None, chip: Optional[str] = None):
+    if project:
+        project = safe_name(project, "project")
+    if chip:
+        chip = safe_name(chip, "chip")
+    releases = []
+    for meta_path in sorted(OTA_RELEASE_DIR.glob("*/meta.json"), reverse=True):
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if project and meta.get("project") != project:
+            continue
+        if chip and meta.get("chip") != chip:
+            continue
+        releases.append(meta)
+    return {"releases": releases}
 
 @app.get("/api/artifacts/{filename}")
 def download_artifact(filename: str):
