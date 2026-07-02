@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>远端编译 - ESP Remote Build</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+</head>
+<body>
+    <div class="shell">
+        <nav class="top-nav">
+            <a href="/ui">首页</a>
+            <a href="/ui/build">远端编译</a>
+            <a href="/ui/flash">本地烧录</a>
+            <a href="/ui/ota">OTA 发布</a>
+            <a href="/ui/jobs">构建历史</a>
+            <a href="/ui/settings">设置</a>
+        </nav>
+        <section class="hero">
+            <div class="hero-top">
+                <div>
+                    <div class="eyebrow">ESP32-S3 Remote Build</div>
+                    <h1>Remote compile, local flash.</h1>
+                </div>
+            </div>
+            <div class="hero-copy">
+                浏览器访问远端构建服务器，页面会调用你本机的 Local Agent 完成源码压缩上传、串口枚举和 <code>esptool</code> 烧录。目标入口是 <code id="remoteBaseText"></code>，本地 Agent 固定为 <code>http://127.0.0.1:8765</code>。
+            </div>
+            <div class="hero-grid">
+                <div class="stat">
+                    <div class="stat-label">Remote Host</div>
+                    <div class="stat-value" id="remoteHostCard"></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Local Agent</div>
+                    <div class="stat-value">http://127.0.0.1:8765</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Current Job</div>
+                    <div class="stat-value" id="jobIdCard">idle</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>1. Project Setup</h2>
+            <div class="grid">
+                <div class="field full">
+                    <label for="sourceMode">源码来源</label>
+                    <select id="sourceMode" onchange="handleSourceModeChange()">
+                        <option value="upload_zip" selected>本地上传构建</option>
+                        <option value="remote_workspace">远端固定工作区构建</option>
+                    </select>
+                    <div class="hint">本地上传构建会通过 Local Agent 压缩并上传 Windows 工程；远端固定工作区构建会直接使用服务器白名单中的工程目录。</div>
+                </div>
+                <div class="field full" id="remoteWorkspaceField" style="display: none;">
+                    <label for="remoteWorkspace">远端工作区</label>
+                    <select id="remoteWorkspace">
+                        <option value="">正在加载远端工作区...</option>
+                    </select>
+                    <div class="hint" id="remoteWorkspaceHint">页面加载时会从远端 Server 的 /api/workspaces 读取可用工作区。</div>
+                </div>
+                <div class="field full local-upload-field" id="localProjectPathField">
+                    <label for="projectPath">Windows 本地工程路径</label>
+                    <input id="projectPath" value="C:\path\to\your\esp-idf-project">
+                    <div class="hint">这个路径只由本机 Agent 读取。远端服务器不会直接访问你的 Windows 文件系统。</div>
+                </div>
+                <div class="field local-upload-field">
+                    <label for="projectName">项目名</label>
+                    <input id="projectName" value="ESP32_S3_wifi_ble_hub">
+                </div>
+                <div class="field local-upload-field">
+                    <label for="target">目标芯片</label>
+                    <select id="target">
+                        <option value="esp32s3" selected>esp32s3</option>
+                        <option value="esp32">esp32</option>
+                        <option value="esp32c3">esp32c3</option>
+                        <option value="esp32c6">esp32c6</option>
+                        <option value="esp32s2">esp32s2</option>
+                    </select>
+                </div>
+                <div class="field full local-upload-field">
+                    <label for="idfImage">ESP-IDF Docker 镜像</label>
+                    <input id="idfImage" value="espressif/idf:v6.0.1">
+                </div>
+            </div>
+            <div class="actions">
+                <button id="startBtn" class="primary" onclick="startBuild()">开始远端编译</button>
+                <button class="secondary" onclick="refreshBuildLog()">刷新构建日志</button>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>2. Build Status</h2>
+            <div id="buildStatusBox" class="status">等待开始。</div>
+            <div class="links" id="linkArea"></div>
+        </section>
+
+        <section class="panel">
+            <h2>4. OTA Release</h2>
+            <div class="grid">
+                <div class="field">
+                    <label for="otaChannel">Channel</label>
+                    <select id="otaChannel">
+                        <option value="test" selected>test</option>
+                        <option value="stable">stable</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="otaVersion">Version</label>
+                    <input id="otaVersion" placeholder="例如 0.1.1">
+                </div>
+                <div class="field">
+                    <label for="otaMinVersion">Min Version</label>
+                    <input id="otaMinVersion" placeholder="可选，例如 0.1.0">
+                </div>
+                <div class="field">
+                    <label for="otaForce">Force Update</label>
+                    <select id="otaForce">
+                        <option value="false" selected>false</option>
+                        <option value="true">true</option>
+                    </select>
+                </div>
+                <div class="field full">
+                    <label for="otaReleaseNotes">Release Notes</label>
+                    <input id="otaReleaseNotes" placeholder="可选发布说明">
+                </div>
+            </div>
+            <div class="actions">
+                <button id="otaPublishBtn" class="primary" onclick="publishOtaRelease()" disabled>发布为 OTA Release</button>
+                <button class="secondary" onclick="copyManifestUrl()">复制 Manifest URL</button>
+            </div>
+            <div id="otaStatusBox" class="status">等待构建成功后发布 OTA。</div>
+        </section>
+
+        <section class="logs" style="grid-template-columns: 1fr;">
+            <div class="panel">
+                <h2>5. Build Log</h2>
+                <div id="buildLogBox" class="log-box">暂无构建日志。</div>
+            </div>
+
+        </section>
+    </div>
+
+        <script src="/static/js/common.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/build.js"></script>
+    <script src="/static/js/ota.js"></script>
+</body>
+</html>

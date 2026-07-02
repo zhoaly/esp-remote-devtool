@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 
 
 app = FastAPI(title="ESP Remote Build Server", version="0.1.0")
@@ -46,6 +47,8 @@ VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 BUILD_LOCK = threading.Lock()
 
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 for directory in (UPLOAD_DIR, WORKSPACE_DIR, ARTIFACT_DIR, OTA_RELEASE_DIR, OTA_CHANNEL_DIR, LOG_DIR, JOB_DIR):
     directory.mkdir(parents=True, exist_ok=True)
@@ -483,14 +486,43 @@ def index() -> Dict[str, str]:
     }
 
 
-@app.get("/ui")
-def ui() -> FileResponse:
-    index_file = STATIC_DIR / "index.html"
+def ui_file(relative_path: str) -> FileResponse:
+    page_file = STATIC_DIR / relative_path
 
-    if not index_file.exists():
+    if not page_file.exists():
         raise HTTPException(status_code=404, detail="UI page not found")
 
-    return FileResponse(index_file, headers={"Cache-Control": "no-store, max-age=0"})
+    return FileResponse(page_file, headers={"Cache-Control": "no-store, max-age=0"})
+
+
+@app.get("/ui")
+def ui_home() -> FileResponse:
+    return ui_file("index.html")
+
+
+@app.get("/ui/build")
+def ui_build() -> FileResponse:
+    return ui_file("pages/build.html")
+
+
+@app.get("/ui/flash")
+def ui_flash() -> FileResponse:
+    return ui_file("pages/flash.html")
+
+
+@app.get("/ui/ota")
+def ui_ota() -> FileResponse:
+    return ui_file("pages/ota.html")
+
+
+@app.get("/ui/jobs")
+def ui_jobs() -> FileResponse:
+    return ui_file("pages/jobs.html")
+
+
+@app.get("/ui/settings")
+def ui_settings() -> FileResponse:
+    return ui_file("pages/settings.html")
 
 
 @app.get("/api/workspaces")
