@@ -60,8 +60,6 @@ async function startBuild() {
             currentDownloadUrl = null;
             currentJob = null;
             currentManifestUrl = null;
-            document.getElementById("otaPublishBtn").disabled = true;
-            setOtaStatus("等待构建成功后发布 OTA。");
             document.getElementById("jobIdCard").textContent = "starting";
             setText("flashLogBox", "暂无烧录日志。");
             setLinks(null, null);
@@ -151,15 +149,6 @@ async function pollJob() {
                     document.getElementById("startBtn").disabled = false;
                     const flashBtnDone = document.getElementById("flashBtn");
                     if (flashBtnDone) flashBtnDone.disabled = false;
-                    document.getElementById("otaPublishBtn").disabled = !job.ota_publishable;
-                    document.getElementById("otaVersion").value = job.project_version || "";
-                    setOtaStatus([
-                        `OTA 可发布: ${job.ota_publishable}`,
-                        `App Bin: ${job.ota_app_bin_name || "未识别"}`,
-                        `App Size: ${job.ota_app_size || 0} bytes`,
-                        `App SHA256: ${job.ota_app_sha256 || ""}`,
-                        job.ota_publishable ? "可点击发布为 OTA Release。" : "App 超出 OTA 分区限制或不可发布。"
-                    ].join("\n"), job.ota_publishable ? "success" : "failed");
                     if (typeof refreshSerialPorts === "function") refreshSerialPorts();
                 }
 

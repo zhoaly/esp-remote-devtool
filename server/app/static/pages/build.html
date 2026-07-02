@@ -96,55 +96,17 @@
             <div class="links" id="linkArea"></div>
         </section>
 
-        <section class="panel">
-            <h2>4. OTA Release</h2>
-            <div class="grid">
-                <div class="field">
-                    <label for="otaChannel">Channel</label>
-                    <select id="otaChannel">
-                        <option value="test" selected>test</option>
-                        <option value="stable">stable</option>
-                    </select>
-                </div>
-                <div class="field">
-                    <label for="otaVersion">Version</label>
-                    <input id="otaVersion" placeholder="例如 0.1.1">
-                </div>
-                <div class="field">
-                    <label for="otaMinVersion">Min Version</label>
-                    <input id="otaMinVersion" placeholder="可选，例如 0.1.0">
-                </div>
-                <div class="field">
-                    <label for="otaForce">Force Update</label>
-                    <select id="otaForce">
-                        <option value="false" selected>false</option>
-                        <option value="true">true</option>
-                    </select>
-                </div>
-                <div class="field full">
-                    <label for="otaReleaseNotes">Release Notes</label>
-                    <input id="otaReleaseNotes" placeholder="可选发布说明">
-                </div>
-            </div>
-            <div class="actions">
-                <button id="otaPublishBtn" class="primary" onclick="publishOtaRelease()" disabled>发布为 OTA Release</button>
-                <button class="secondary" onclick="copyManifestUrl()">复制 Manifest URL</button>
-            </div>
-            <div id="otaStatusBox" class="status">等待构建成功后发布 OTA。</div>
-        </section>
-
         <section class="logs" style="grid-template-columns: 1fr;">
             <div class="panel">
-                <h2>5. Build Log</h2>
+                <h2>3. Build Log</h2>
                 <div id="buildLogBox" class="log-box">暂无构建日志。</div>
             </div>
 
         </section>
     </div>
 
-        <script src="/static/js/common.js"></script>
+    <script src="/static/js/common.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/build.js"></script>
-    <script src="/static/js/ota.js"></script>
 </body>
 </html>

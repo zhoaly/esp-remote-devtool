@@ -45,6 +45,7 @@ MAX_UPLOAD_SIZE = int(os.getenv("ESP_MAX_UPLOAD_SIZE_MB", "200")) * 1024 * 1024
 MAX_BUILD_RECORDS = int(os.getenv("ESP_MAX_BUILD_RECORDS", "100"))
 OTA_APP_PARTITION_SIZE = int(os.getenv("ESP_OTA_APP_PARTITION_SIZE", str(6 * 1024 * 1024)))
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+VERSION_SHORT_RE = re.compile(r"^\d+\.\d+$")
 
 BUILD_LOCK = threading.Lock()
 
@@ -238,6 +239,17 @@ def parse_semver(version: str) -> Tuple[int, int, int]:
     return tuple(int(part) for part in version.split("."))  # type: ignore[return-value]
 
 
+def normalize_ota_version(version: Optional[str]) -> Optional[str]:
+    if not version:
+        return None
+
+    normalized = str(version).strip()
+    if VERSION_SHORT_RE.fullmatch(normalized):
+        return f"{normalized}.0"
+
+    return normalized
+
+
 def absolute_url(request: Request, path: str) -> str:
     return str(request.url_for("index")).rstrip("/") + path
 
@@ -251,7 +263,7 @@ def read_project_version(project_dir: Path) -> Optional[str]:
     except Exception:
         return None
     version = data.get("version") or data.get("project_version") or data.get("app_version")
-    return str(version) if version else None
+    return normalize_ota_version(str(version)) if version else None
 
 
 def find_app_bin(project_dir: Path) -> Path:
@@ -781,8 +793,8 @@ def publish_ota_release(job_id: str, payload: Dict[str, Any], request: Request):
     project = safe_name(str(job.get("project_name") or DEFAULT_PROJECT_NAME), "project")
     chip = safe_name(str(job.get("target") or DEFAULT_TARGET), "chip")
     channel = safe_name(str(payload.get("channel") or "test"), "channel")
-    version = str(payload.get("version") or job.get("project_version") or "").strip()
-    min_version = str(payload.get("min_version") or "").strip()
+    version = normalize_ota_version(str(payload.get("version") or job.get("project_version") or "")) or ""
+    min_version = normalize_ota_version(str(payload.get("min_version") or "")) or ""
     force = bool(payload.get("force", False))
     release_notes = str(payload.get("release_notes") or "")
 

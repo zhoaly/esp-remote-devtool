@@ -1,4 +1,5 @@
 const OTA_VERSION_RE = /^\d+\.\d+\.\d+$/;
+const OTA_SHORT_VERSION_RE = /^\d+\.\d+$/;
 
 let otaJobs = [];
 let otaReleases = [];
@@ -30,6 +31,12 @@ function handleOtaChannelChange() {
     if (customField) customField.style.display = channel === "custom" ? "grid" : "none";
 }
 
+function normalizeOtaVersionForInput(version) {
+    const normalized = String(version || "").trim();
+    if (OTA_SHORT_VERSION_RE.test(normalized)) return `${normalized}.0`;
+    return normalized;
+}
+
 function validateOtaForm() {
     if (!currentJobId || !currentJob) {
         return "请选择可发布的构建任务。";
@@ -46,12 +53,12 @@ function validateOtaForm() {
         return "Channel 只能包含字母、数字、下划线、点和短横线。";
     }
 
-    const version = document.getElementById("otaVersion")?.value.trim() || "";
+    const version = normalizeOtaVersionForInput(document.getElementById("otaVersion")?.value);
     if (!OTA_VERSION_RE.test(version)) {
         return "Version 必须是 x.y.z 格式，例如 0.1.1。";
     }
 
-    const minVersion = document.getElementById("otaMinVersion")?.value.trim() || "";
+    const minVersion = normalizeOtaVersionForInput(document.getElementById("otaMinVersion")?.value);
     if (minVersion && !OTA_VERSION_RE.test(minVersion)) {
         return "Min Version 必须为空或 x.y.z 格式。";
     }
@@ -62,8 +69,8 @@ function validateOtaForm() {
 function buildOtaPayload() {
     return {
         channel: getOtaChannel(),
-        version: document.getElementById("otaVersion").value.trim(),
-        min_version: document.getElementById("otaMinVersion").value.trim(),
+        version: normalizeOtaVersionForInput(document.getElementById("otaVersion").value),
+        min_version: normalizeOtaVersionForInput(document.getElementById("otaMinVersion").value),
         force: document.getElementById("otaForce").value === "true",
         release_notes: document.getElementById("otaReleaseNotes").value.trim(),
     };
@@ -86,7 +93,7 @@ function renderSelectedJobStatus() {
         `Job ID: ${currentJob.job_id}`,
         `项目: ${currentJob.project_name || "-"}`,
         `Target: ${currentJob.target || "-"}`,
-        `Version: ${currentJob.project_version || "-"}`,
+        `Version: ${normalizeOtaVersionForInput(currentJob.project_version) || "-"}`,
         `App Bin: ${currentJob.ota_app_bin_name || "未识别"}`,
         `App Size: ${currentJob.ota_app_size || 0} / ${limit} bytes`,
         `App SHA256: ${currentJob.ota_app_sha256 || "-"}`,
@@ -107,7 +114,7 @@ function selectOtaJob(jobId) {
 
     const versionInput = document.getElementById("otaVersion");
     if (versionInput && !versionInput.value.trim()) {
-        versionInput.value = job.project_version || "";
+        versionInput.value = normalizeOtaVersionForInput(job.project_version);
     }
 
     const publishBtn = document.getElementById("otaPublishBtn");
@@ -139,7 +146,7 @@ function renderOtaJobs() {
     list.innerHTML = successJobs.map((job) => {
         const selected = job.job_id === currentJobId ? " selected" : "";
         const size = `${job.ota_app_size || 0} bytes`;
-        const version = job.project_version || "-";
+        const version = normalizeOtaVersionForInput(job.project_version) || "-";
         const project = job.project_name || "-";
         const target = job.target || "-";
         return `
