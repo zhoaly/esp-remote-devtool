@@ -430,13 +430,50 @@
             <div id="flashStatusBox" class="status">等待构建成功后烧录。</div>
         </section>
 
+        <section class="panel">
+            <h2>4. OTA Release</h2>
+            <div class="grid">
+                <div class="field">
+                    <label for="otaChannel">Channel</label>
+                    <select id="otaChannel">
+                        <option value="test" selected>test</option>
+                        <option value="stable">stable</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="otaVersion">Version</label>
+                    <input id="otaVersion" placeholder="例如 0.1.1">
+                </div>
+                <div class="field">
+                    <label for="otaMinVersion">Min Version</label>
+                    <input id="otaMinVersion" placeholder="可选，例如 0.1.0">
+                </div>
+                <div class="field">
+                    <label for="otaForce">Force Update</label>
+                    <select id="otaForce">
+                        <option value="false" selected>false</option>
+                        <option value="true">true</option>
+                    </select>
+                </div>
+                <div class="field full">
+                    <label for="otaReleaseNotes">Release Notes</label>
+                    <input id="otaReleaseNotes" placeholder="可选发布说明">
+                </div>
+            </div>
+            <div class="actions">
+                <button id="otaPublishBtn" class="primary" onclick="publishOtaRelease()" disabled>发布为 OTA Release</button>
+                <button class="secondary" onclick="copyManifestUrl()">复制 Manifest URL</button>
+            </div>
+            <div id="otaStatusBox" class="status">等待构建成功后发布 OTA。</div>
+        </section>
+
         <section class="logs">
             <div class="panel">
-                <h2>4. Build Log</h2>
+                <h2>5. Build Log</h2>
                 <div id="buildLogBox" class="log-box">暂无构建日志。</div>
             </div>
             <div class="panel">
-                <h2>5. Flash Log</h2>
+                <h2>6. Flash Log</h2>
                 <div id="flashLogBox" class="log-box">暂无烧录日志。</div>
             </div>
         </section>
@@ -448,6 +485,8 @@
 
         let currentJobId = null;
         let currentDownloadUrl = null;
+        let currentJob = null;
+        let currentManifestUrl = null;
         let pollTimer = null;
         let remoteWorkspaces = [];
 
@@ -524,6 +563,13 @@
             box.textContent = text;
         }
 
+        function setOtaStatus(text, type = "") {
+            const box = document.getElementById("otaStatusBox");
+            box.className = "status";
+            if (type) box.classList.add(type);
+            box.textContent = text;
+        }
+
         function setLinks(downloadUrl, logUrl) {
             const area = document.getElementById("linkArea");
             area.innerHTML = "";
@@ -575,6 +621,10 @@
 
             currentJobId = null;
             currentDownloadUrl = null;
+            currentJob = null;
+            currentManifestUrl = null;
+            document.getElementById("otaPublishBtn").disabled = true;
+            setOtaStatus("等待构建成功后发布 OTA。");
             document.getElementById("jobIdCard").textContent = "starting";
             document.getElementById("flashLogBox").textContent = "暂无烧录日志。";
             setFlashStatus("等待构建成功后烧录。");
@@ -658,6 +708,7 @@
                 }
 
                 const job = await resp.json();
+                currentJob = job;
                 document.getElementById("jobIdCard").textContent = job.job_id;
                 setBuildStatus([
                     `Job ID: ${job.job_id}`,
@@ -676,6 +727,15 @@
                     setLinks(job.download_url, job.log_url);
                     document.getElementById("startBtn").disabled = false;
                     document.getElementById("flashBtn").disabled = false;
+                    document.getElementById("otaPublishBtn").disabled = !job.ota_publishable;
+                    document.getElementById("otaVersion").value = job.project_version || "";
+                    setOtaStatus([
+                        `OTA 可发布: ${job.ota_publishable}`,
+                        `App Bin: ${job.ota_app_bin_name || "未识别"}`,
+                        `App Size: ${job.ota_app_size || 0} bytes`,
+                        `App SHA256: ${job.ota_app_sha256 || ""}`,
+                        job.ota_publishable ? "可点击发布为 OTA Release。" : "App 超出 OTA 分区限制或不可发布。"
+                    ].join("\n"), job.ota_publishable ? "success" : "failed");
                     refreshSerialPorts();
                 }
 
@@ -703,6 +763,54 @@
                 box.scrollTop = box.scrollHeight;
             } catch {
             }
+        }
+
+        async function publishOtaRelease() {
+            if (!currentJobId || !currentJob) {
+                setOtaStatus("没有可发布的构建任务。", "failed");
+                return;
+            }
+            const btn = document.getElementById("otaPublishBtn");
+            btn.disabled = true;
+            try {
+                const payload = {
+                    channel: document.getElementById("otaChannel").value,
+                    version: document.getElementById("otaVersion").value.trim(),
+                    min_version: document.getElementById("otaMinVersion").value.trim(),
+                    force: document.getElementById("otaForce").value === "true",
+                    release_notes: document.getElementById("otaReleaseNotes").value.trim()
+                };
+                const resp = await fetch(REMOTE_BASE + "/api/ota/publish/" + currentJobId, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                if (!resp.ok) throw new Error(await parseErrorResponse(resp));
+                const data = await resp.json();
+                currentManifestUrl = data.manifest_url;
+                setOtaStatus([
+                    "OTA 发布成功",
+                    `Release ID: ${data.release_id}`,
+                    `Manifest URL: ${data.manifest_url}`,
+                    `Firmware URL: ${data.firmware_url}`,
+                    "",
+                    `ota check ${data.manifest_url}`,
+                    `ota upgrade_manifest ${data.manifest_url}`
+                ].join("\n"), "success");
+            } catch (err) {
+                setOtaStatus(`OTA 发布失败\n${err.message}`, "failed");
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function copyManifestUrl() {
+            if (!currentManifestUrl) {
+                setOtaStatus("还没有 Manifest URL，请先发布 OTA Release。", "failed");
+                return;
+            }
+            await navigator.clipboard.writeText(currentManifestUrl);
+            setOtaStatus(`已复制 Manifest URL\n${currentManifestUrl}`, "success");
         }
 
         async function refreshSerialPorts() {
