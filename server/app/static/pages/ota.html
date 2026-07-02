@@ -1,1 +1,136 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>OTA 发布</title><link rel="stylesheet" href="/static/css/common.css"></head><body><div class="shell"><nav class="top-nav"><a href="/ui">首页</a><a href="/ui/build">远端编译</a><a href="/ui/flash">本地烧录</a><a class="active" href="/ui/ota">OTA 发布</a><a href="/ui/jobs">构建历史</a><a href="/ui/settings">设置</a></nav><section class="hero"><div class="eyebrow">OTA</div><h1>OTA 发布</h1><div class="hero-copy">OTA 发布已从本地烧录页面独立出来。当前可先在“远端编译”页面构建成功后发布，后续该页面将承载选择 job、生成 manifest URL 与复制升级命令等完整流程。</div></section><section class="panel"><h2>后续功能规划</h2><div class="status">选择 job\n查看 app.bin 信息\n发布 OTA release\n生成 manifest URL\n复制 ota upgrade_manifest 命令</div></section></div><script src="/static/js/common.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTA 发布</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+</head>
+<body>
+    <div class="shell">
+        <nav class="top-nav">
+            <a href="/ui">首页</a>
+            <a href="/ui/build">远端编译</a>
+            <a href="/ui/flash">本地烧录</a>
+            <a class="active" href="/ui/ota">OTA 发布</a>
+            <a href="/ui/jobs">构建历史</a>
+            <a href="/ui/settings">设置</a>
+        </nav>
+
+        <section class="hero">
+            <div class="hero-top">
+                <div>
+                    <div class="eyebrow">OTA Release</div>
+                    <h1>OTA 发布</h1>
+                </div>
+            </div>
+            <div class="hero-copy">
+                从最近构建记录中选择可发布的 app.bin，生成 OTA manifest，并把指定 channel 的 latest 指针更新到该版本。
+            </div>
+            <div class="hero-grid">
+                <div class="stat">
+                    <div class="stat-label">Remote Host</div>
+                    <div class="stat-value" id="remoteHostCard">-</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Selected Job</div>
+                    <div class="stat-value" id="otaSelectedJobCard">未选择</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Manifest</div>
+                    <div class="stat-value" id="otaManifestCard">未发布</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <h2>1. 选择构建</h2>
+                <button class="secondary compact-button" onclick="loadOtaJobs()">刷新构建</button>
+            </div>
+            <div id="otaJobsList" class="compact-list">
+                <div class="empty-state">加载构建记录...</div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>2. 发布参数</h2>
+            <div class="grid">
+                <div class="field">
+                    <label for="otaChannel">Channel</label>
+                    <select id="otaChannel" onchange="handleOtaChannelChange()">
+                        <option value="test" selected>test</option>
+                        <option value="stable">stable</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="field" id="otaCustomChannelField" style="display: none;">
+                    <label for="otaCustomChannel">Custom Channel</label>
+                    <input id="otaCustomChannel" placeholder="例如 beta">
+                </div>
+                <div class="field">
+                    <label for="otaVersion">Version</label>
+                    <input id="otaVersion" placeholder="例如 0.1.1">
+                </div>
+                <div class="field">
+                    <label for="otaMinVersion">Min Version</label>
+                    <input id="otaMinVersion" placeholder="可选，例如 0.1.0">
+                </div>
+                <div class="field">
+                    <label for="otaForce">Force Update</label>
+                    <select id="otaForce">
+                        <option value="false" selected>false</option>
+                        <option value="true">true</option>
+                    </select>
+                </div>
+                <div class="field full">
+                    <label for="otaReleaseNotes">Release Notes</label>
+                    <input id="otaReleaseNotes" placeholder="可选发布说明">
+                </div>
+            </div>
+            <div class="actions">
+                <button id="otaPublishBtn" class="primary" onclick="publishOtaRelease()" disabled>发布 OTA Release</button>
+                <button class="secondary" onclick="copyManifestUrl()">复制 Manifest URL</button>
+                <button class="secondary" onclick="copyFirmwareUrl()">复制 Firmware URL</button>
+            </div>
+            <div id="otaStatusBox" class="status">请选择可发布的成功构建。</div>
+        </section>
+
+        <section class="panel">
+            <h2>3. 发布结果</h2>
+            <div id="otaReleaseResult" class="release-result">
+                <div class="empty-state">发布成功后这里会显示 manifest、firmware 和升级命令。</div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <h2>4. 历史发布</h2>
+                <button class="secondary compact-button" onclick="loadOtaReleases()">刷新发布</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Channel</th>
+                            <th>项目</th>
+                            <th>Chip</th>
+                            <th>Version</th>
+                            <th>创建时间</th>
+                            <th>Job ID</th>
+                            <th>链接</th>
+                        </tr>
+                    </thead>
+                    <tbody id="otaReleasesBody">
+                        <tr><td colspan="7">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/ota.js"></script>
+</body>
+</html>
