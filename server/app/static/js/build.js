@@ -47,68 +47,7 @@ function handleSourceModeChange() {
             }
         }
 
-        function setBuildStatus(text, type = "") {
-            const box = document.getElementById("buildStatusBox");
-            box.className = "status";
-            if (type) box.classList.add(type);
-            box.textContent = text;
-        }
-
-        function setFlashStatus(text, type = "") {
-            const box = document.getElementById("flashStatusBox");
-            box.className = "status";
-            if (type) box.classList.add(type);
-            box.textContent = text;
-        }
-
-        function setOtaStatus(text, type = "") {
-            const box = document.getElementById("otaStatusBox");
-            box.className = "status";
-            if (type) box.classList.add(type);
-            box.textContent = text;
-        }
-
-        function setLinks(downloadUrl, logUrl) {
-            const area = document.getElementById("linkArea");
-            area.innerHTML = "";
-
-            if (downloadUrl) {
-                const download = document.createElement("a");
-                download.href = REMOTE_BASE + downloadUrl;
-                download.target = "_blank";
-                download.textContent = "下载固件包";
-                area.appendChild(download);
-            }
-
-            if (logUrl) {
-                const log = document.createElement("a");
-                log.href = REMOTE_BASE + logUrl;
-                log.target = "_blank";
-                log.textContent = "打开完整构建日志";
-                area.appendChild(log);
-            }
-        }
-
-        async function parseErrorResponse(resp) {
-            const text = await resp.text();
-            try {
-                const data = JSON.parse(text);
-                return typeof data.detail === "string"
-                    ? data.detail
-                    : JSON.stringify(data.detail || data, null, 2);
-            } catch {
-                return text || `HTTP ${resp.status}`;
-            }
-        }
-
-        function stopPolling() {
-            if (pollTimer) {
-                clearInterval(pollTimer);
-                pollTimer = null;
-            }
-        }
-
-        async function startBuild() {
+async function startBuild() {
             const startBtn = document.getElementById("startBtn");
             const flashBtn = document.getElementById("flashBtn");
             const sourceMode = document.getElementById("sourceMode").value;
@@ -125,7 +64,6 @@ function handleSourceModeChange() {
             setOtaStatus("等待构建成功后发布 OTA。");
             document.getElementById("jobIdCard").textContent = "starting";
             setText("flashLogBox", "暂无烧录日志。");
-            setFlashStatus("等待构建成功后烧录。");
             setLinks(null, null);
 
             try {
@@ -188,7 +126,7 @@ function handleSourceModeChange() {
             }
         }
 
-        async function pollJob() {
+async function pollJob() {
             if (!currentJobId) return;
 
             try {
@@ -222,7 +160,7 @@ function handleSourceModeChange() {
                         `App SHA256: ${job.ota_app_sha256 || ""}`,
                         job.ota_publishable ? "可点击发布为 OTA Release。" : "App 超出 OTA 分区限制或不可发布。"
                     ].join("\n"), job.ota_publishable ? "success" : "failed");
-                    refreshSerialPorts();
+                    if (typeof refreshSerialPorts === "function") refreshSerialPorts();
                 }
 
                 if (job.status === "failed") {
@@ -238,7 +176,7 @@ function handleSourceModeChange() {
             }
         }
 
-        async function refreshBuildLog() {
+async function refreshBuildLog() {
             if (!currentJobId) return;
 
             try {
