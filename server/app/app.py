@@ -262,7 +262,7 @@ def read_project_version(project_dir: Path) -> Optional[str]:
         data = json.loads(desc.read_text(encoding="utf-8"))
     except Exception:
         return None
-    version = data.get("version") or data.get("project_version") or data.get("app_version")
+    version = data.get("version")
     return normalize_ota_version(str(version)) if version else None
 
 
@@ -793,7 +793,7 @@ def publish_ota_release(job_id: str, payload: Dict[str, Any], request: Request):
     project = safe_name(str(job.get("project_name") or DEFAULT_PROJECT_NAME), "project")
     chip = safe_name(str(job.get("target") or DEFAULT_TARGET), "chip")
     channel = safe_name(str(payload.get("channel") or "test"), "channel")
-    version = normalize_ota_version(str(payload.get("version") or job.get("project_version") or "")) or ""
+    version = normalize_ota_version(str(payload.get("version") or "")) or ""
     min_version = normalize_ota_version(str(payload.get("min_version") or "")) or ""
     force = bool(payload.get("force", False))
     release_notes = str(payload.get("release_notes") or "")

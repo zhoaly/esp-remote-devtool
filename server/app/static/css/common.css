@@ -507,7 +507,8 @@ th { color: #fed7aa; font-size: 13px; }
     display: grid;
     gap: 10px;
 }
-#otaJobsList {
+#otaJobsList,
+#flashJobsList {
     max-height: 430px;
     overflow-y: auto;
     padding-right: 6px;
@@ -515,23 +516,28 @@ th { color: #fed7aa; font-size: 13px; }
     scrollbar-color: rgba(249, 115, 22, 0.64) rgba(15, 23, 42, 0.68);
     scrollbar-width: thin;
 }
-#otaJobsList::-webkit-scrollbar {
+#otaJobsList::-webkit-scrollbar,
+#flashJobsList::-webkit-scrollbar {
     width: 10px;
 }
-#otaJobsList::-webkit-scrollbar-track {
+#otaJobsList::-webkit-scrollbar-track,
+#flashJobsList::-webkit-scrollbar-track {
     border-radius: 999px;
     background: rgba(15, 23, 42, 0.68);
     border: 1px solid rgba(148, 163, 184, 0.14);
 }
-#otaJobsList::-webkit-scrollbar-thumb {
+#otaJobsList::-webkit-scrollbar-thumb,
+#flashJobsList::-webkit-scrollbar-thumb {
     border-radius: 999px;
     background: linear-gradient(180deg, rgba(251, 146, 60, 0.88), rgba(249, 115, 22, 0.58));
     border: 2px solid rgba(15, 23, 42, 0.88);
 }
-#otaJobsList::-webkit-scrollbar-thumb:hover {
+#otaJobsList::-webkit-scrollbar-thumb:hover,
+#flashJobsList::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, rgba(253, 186, 116, 0.95), rgba(249, 115, 22, 0.76));
 }
-#otaJobsList .empty-state {
+#otaJobsList .empty-state,
+#flashJobsList .empty-state {
     min-height: auto;
 }
 .list-row {

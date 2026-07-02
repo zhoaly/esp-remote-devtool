@@ -1,9 +1,73 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>本地烧录 - ESP Remote Build</title><link rel="stylesheet" href="/static/css/common.css"></head>
-<body><div class="shell">
-<nav class="top-nav"><a href="/ui">首页</a><a href="/ui/build">远端编译</a><a href="/ui/flash" class="active">本地烧录</a><a href="/ui/ota">OTA 发布</a><a href="/ui/jobs">构建历史</a><a href="/ui/settings">设置</a></nav>
-<section class="hero"><div class="eyebrow">Local Flash</div><h1>本地串口烧录</h1><div class="hero-copy">该页面只调用本机 Local Agent：<code id="localAgentCard"></code>。可以从构建历史复制 artifact URL 后填入。</div></section>
-<section class="panel"><h2>Flash Setup</h2><div class="grid"><div class="field full"><label for="artifactUrl">Artifact URL</label><input id="artifactUrl" placeholder="例如 http://server:8000/api/artifacts/xxx.zip"><div class="hint">请输入远端构建产物完整 URL。</div></div><div class="field full"><label for="serialPort">串口选择</label><select id="serialPort"><option value="">请先刷新串口</option></select></div><div class="field"><label for="flashBaud">烧录波特率</label><input id="flashBaud" value="460800"></div><div class="field"><label for="flashChip">芯片型号</label><input id="flashChip" value="esp32s3"></div></div><div class="actions"><button class="secondary" onclick="refreshSerialPorts()">刷新串口</button><button id="flashBtn" class="primary" onclick="flashFirmware()">一键烧录</button></div><div id="flashStatusBox" class="status">等待输入固件 URL 并刷新串口。</div></section>
-<section class="panel"><h2>Flash Log</h2><div id="flashLogBox" class="log-box">暂无烧录日志。</div></section>
-</div><script src="/static/js/common.js"></script><script src="/static/js/api.js"></script><script src="/static/js/flash.js"></script></body></html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地烧录 - ESP Remote Build</title>
+    <link rel="stylesheet" href="/static/css/common.css">
+</head>
+<body>
+    <div class="shell">
+        <nav class="top-nav">
+            <a href="/ui">首页</a>
+            <a href="/ui/build">远端编译</a>
+            <a href="/ui/flash" class="active">本地烧录</a>
+            <a href="/ui/ota">OTA 发布</a>
+            <a href="/ui/jobs">构建历史</a>
+            <a href="/ui/settings">设置</a>
+        </nav>
+
+        <section class="hero">
+            <div class="eyebrow">Local Flash</div>
+            <h1>本地串口烧录</h1>
+            <div class="hero-copy">
+                选择已有构建产物后，通过本机 Local Agent：<code id="localAgentCard"></code> 下载 artifact 并调用 <code>esptool</code> 烧录。
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <h2>1. 选择构建</h2>
+                <button class="secondary compact-button" onclick="loadFlashJobs()">刷新构建</button>
+            </div>
+            <div id="flashJobsList" class="compact-list">
+                <div class="empty-state">加载构建记录...</div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>2. Flash Setup</h2>
+            <div class="grid">
+                <div class="field full">
+                    <label for="serialPort">串口选择</label>
+                    <select id="serialPort">
+                        <option value="">请先刷新串口</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="flashBaud">烧录波特率</label>
+                    <input id="flashBaud" value="460800">
+                </div>
+                <div class="field">
+                    <label for="flashChip">芯片型号</label>
+                    <input id="flashChip" value="esp32s3">
+                </div>
+            </div>
+            <div class="actions">
+                <button class="secondary" onclick="refreshSerialPorts()">刷新串口</button>
+                <button id="flashBtn" class="primary" onclick="flashFirmware()" disabled>一键烧录</button>
+            </div>
+            <div id="flashStatusBox" class="status">请选择一个成功构建并刷新串口。</div>
+        </section>
+
+        <section class="panel">
+            <h2>3. Flash Log</h2>
+            <div id="flashLogBox" class="log-box">暂无烧录日志。</div>
+        </section>
+    </div>
+
+    <script src="/static/js/common.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/flash.js"></script>
+</body>
+</html>
