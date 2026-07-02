@@ -42,6 +42,7 @@ DEFAULT_PROJECT_NAME = os.getenv("ESP_DEFAULT_PROJECT_NAME", "ESP32_S3_wifi_ble_
 DEFAULT_IDF_IMAGE = os.getenv("ESP_DEFAULT_IDF_IMAGE", "espressif/idf:v6.0.1")
 DEFAULT_TARGET = os.getenv("ESP_DEFAULT_TARGET", "esp32s3")
 MAX_UPLOAD_SIZE = int(os.getenv("ESP_MAX_UPLOAD_SIZE_MB", "200")) * 1024 * 1024
+MAX_BUILD_RECORDS = int(os.getenv("ESP_MAX_BUILD_RECORDS", "100"))
 OTA_APP_PARTITION_SIZE = int(os.getenv("ESP_OTA_APP_PARTITION_SIZE", str(6 * 1024 * 1024)))
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
@@ -64,6 +65,73 @@ def job_file(job_id: str) -> Path:
 
 def log_file(job_id: str) -> Path:
     return LOG_DIR / f"{job_id}.log"
+
+
+def is_managed_path(path: Path, allowed_roots: Tuple[Path, ...]) -> bool:
+    resolved_path = path.expanduser().resolve()
+
+    return any(resolved_path == root or root in resolved_path.parents for root in allowed_roots)
+
+
+def remove_path_if_managed(path: Path, allowed_roots: Tuple[Path, ...]) -> None:
+    if not is_managed_path(path, allowed_roots):
+        return
+
+    if path.is_dir():
+        shutil.rmtree(path, ignore_errors=True)
+    else:
+        path.unlink(missing_ok=True)
+
+
+def cleanup_job_record(job_id: str, data: Dict[str, Any], job_path: Path) -> None:
+    managed_file_roots = (UPLOAD_DIR, ARTIFACT_DIR, LOG_DIR)
+    managed_workspace_roots = (WORKSPACE_DIR,)
+
+    for field in ("upload_file", "artifact", "log"):
+        value = data.get(field)
+        if value:
+            remove_path_if_managed(Path(str(value)), managed_file_roots)
+
+    artifact_name = data.get("artifact_name")
+    if artifact_name:
+        remove_path_if_managed(ARTIFACT_DIR / str(artifact_name), managed_file_roots)
+
+    workspace = data.get("workspace")
+    if workspace:
+        remove_path_if_managed(Path(str(workspace)), managed_workspace_roots)
+
+    remove_path_if_managed(UPLOAD_DIR / f"{job_id}.zip", managed_file_roots)
+    remove_path_if_managed(LOG_DIR / f"{job_id}.log", managed_file_roots)
+    for artifact_path in ARTIFACT_DIR.glob(f"*_{job_id}_firmware.zip"):
+        remove_path_if_managed(artifact_path, managed_file_roots)
+    remove_path_if_managed(WORKSPACE_DIR / job_id, managed_workspace_roots)
+
+    job_path.unlink(missing_ok=True)
+
+
+def cleanup_old_build_records() -> None:
+    if MAX_BUILD_RECORDS < 1:
+        return
+
+    jobs: List[Tuple[str, str, Path, Dict[str, Any]]] = []
+
+    for path in JOB_DIR.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+
+        job_id = str(data.get("job_id") or path.stem)
+        sort_key = str(data.get("created_at") or path.stem)
+        jobs.append((sort_key, job_id, path, data))
+
+    jobs.sort(key=lambda item: item[0], reverse=True)
+
+    for _, job_id, path, data in jobs[MAX_BUILD_RECORDS:]:
+        cleanup_job_record(job_id, data, path)
+
+
+cleanup_old_build_records()
 
 
 def save_job(job_id: str, data: Dict[str, Any]) -> None:
@@ -580,6 +648,7 @@ async def build_from_workspace(payload: Dict[str, Any]):
             "log_url": f"/api/logs/{job_id}",
         },
     )
+    cleanup_old_build_records()
 
     worker = threading.Thread(
         target=workspace_build_worker,
@@ -655,6 +724,7 @@ async def build_from_upload(
             "log_url": f"/api/logs/{job_id}",
         },
     )
+    cleanup_old_build_records()
 
     worker = threading.Thread(
         target=build_worker,
@@ -686,7 +756,7 @@ def list_jobs():
         except Exception:
             continue
 
-    return jobs[:50]
+    return jobs[:MAX_BUILD_RECORDS]
 
 
 @app.get("/api/logs/{job_id}", response_class=PlainTextResponse)
