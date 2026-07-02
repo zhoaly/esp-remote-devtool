@@ -182,6 +182,30 @@
             transform: translateY(-1px);
         }
 
+        select {
+            appearance: none;
+            background:
+                linear-gradient(45deg, transparent 50%, #fed7aa 50%) calc(100% - 20px) 52% / 7px 7px no-repeat,
+                linear-gradient(135deg, #fed7aa 50%, transparent 50%) calc(100% - 15px) 52% / 7px 7px no-repeat,
+                linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(13, 25, 44, 0.94));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            color-scheme: dark;
+            padding-right: 42px;
+        }
+
+        select:hover {
+            border-color: rgba(249, 115, 22, 0.46);
+            background:
+                linear-gradient(45deg, transparent 50%, #fdba74 50%) calc(100% - 20px) 52% / 7px 7px no-repeat,
+                linear-gradient(135deg, #fdba74 50%, transparent 50%) calc(100% - 15px) 52% / 7px 7px no-repeat,
+                linear-gradient(180deg, rgba(15, 23, 42, 1), rgba(21, 35, 56, 0.96));
+        }
+
+        select option {
+            background: #0f172a;
+            color: var(--text);
+        }
+
         .hint {
             color: var(--muted);
             font-size: 12px;
@@ -371,6 +395,24 @@ th { color: #fed7aa; font-size: 13px; }
     overflow-y: auto;
     padding-right: 6px;
     scrollbar-gutter: stable;
+    scrollbar-color: rgba(249, 115, 22, 0.64) rgba(15, 23, 42, 0.68);
+    scrollbar-width: thin;
+}
+#otaJobsList::-webkit-scrollbar {
+    width: 10px;
+}
+#otaJobsList::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.68);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+}
+#otaJobsList::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(251, 146, 60, 0.88), rgba(249, 115, 22, 0.58));
+    border: 2px solid rgba(15, 23, 42, 0.88);
+}
+#otaJobsList::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(253, 186, 116, 0.95), rgba(249, 115, 22, 0.76));
 }
 #otaJobsList .empty-state {
     min-height: auto;
