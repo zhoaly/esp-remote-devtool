@@ -418,6 +418,29 @@
             font-size: 13px;
             line-height: 1.55;
             white-space: pre-wrap;
+            scrollbar-color: rgba(249, 115, 22, 0.64) rgba(15, 23, 42, 0.68);
+            scrollbar-width: thin;
+        }
+
+        .log-box::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        .log-box::-webkit-scrollbar-track {
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.68);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .log-box::-webkit-scrollbar-thumb {
+            border-radius: 999px;
+            background: linear-gradient(180deg, rgba(251, 146, 60, 0.88), rgba(249, 115, 22, 0.58));
+            border: 2px solid rgba(2, 6, 23, 0.95);
+        }
+
+        .log-box::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, rgba(253, 186, 116, 0.95), rgba(249, 115, 22, 0.76));
         }
 
         code {
