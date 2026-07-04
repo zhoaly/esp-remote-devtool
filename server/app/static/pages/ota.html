@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OTA 发布</title>
-    <link rel="stylesheet" href="/static/css/common.css">
+    <link rel="stylesheet" href="/static/css/common.css?v=20260703-ota-release-state">
 </head>
 <body>
     <div class="shell">
@@ -74,7 +74,7 @@
                 </div>
                 <div class="field">
                     <label for="otaMinVersion">Min Version</label>
-                    <input id="otaMinVersion" placeholder="可选，例如 0.1.0">
+                    <input id="otaMinVersion" value="0.0.0" placeholder="可选，例如 0.1.0">
                 </div>
                 <div class="field">
                     <label for="otaForce">Force Update</label>
@@ -119,18 +119,19 @@
                             <th>创建时间</th>
                             <th>Job ID</th>
                             <th>链接</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="otaReleasesBody">
-                        <tr><td colspan="7">加载中...</td></tr>
+                        <tr><td colspan="8">加载中...</td></tr>
                     </tbody>
                 </table>
             </div>
         </section>
     </div>
 
-    <script src="/static/js/common.js"></script>
-    <script src="/static/js/api.js"></script>
-    <script src="/static/js/ota.js"></script>
+    <script src="/static/js/common.js?v=20260703-ota-release-state"></script>
+    <script src="/static/js/api.js?v=20260703-ota-release-state"></script>
+    <script src="/static/js/ota.js?v=20260703-ota-release-state"></script>
 </body>
 </html>

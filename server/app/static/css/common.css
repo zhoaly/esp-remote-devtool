@@ -526,6 +526,15 @@ th { color: #fed7aa; font-size: 13px; }
 }
 .panel-heading h2 { margin: 0; }
 .compact-button { padding: 9px 14px; }
+.danger-button {
+    border-color: rgba(239, 68, 68, 0.46);
+    background: rgba(127, 29, 29, 0.22);
+    color: #fecaca;
+}
+.danger-button:hover {
+    border-color: rgba(248, 113, 113, 0.72);
+    background: rgba(153, 27, 27, 0.34);
+}
 .compact-list {
     display: grid;
     gap: 10px;

@@ -304,6 +304,121 @@ def latest_channel_manifest(channel: str, project: str, chip: str) -> Optional[D
         return None
     return json.loads(path.read_text(encoding="utf-8"))
 
+
+def load_ota_release_meta(release_id: str) -> Dict[str, Any]:
+    path = OTA_RELEASE_DIR / release_id / "meta.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="OTA release not found")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def list_ota_release_meta(
+    project: Optional[str] = None,
+    chip: Optional[str] = None,
+    channel: Optional[str] = None,
+    job_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    releases: List[Dict[str, Any]] = []
+    for meta_path in OTA_RELEASE_DIR.glob("*/meta.json"):
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if project and meta.get("project") != project:
+            continue
+        if chip and meta.get("chip") != chip:
+            continue
+        if channel and meta.get("channel") != channel:
+            continue
+        if job_id and meta.get("job_id") != job_id:
+            continue
+        releases.append(meta)
+
+    releases.sort(key=lambda item: str(item.get("created_at") or item.get("release_id") or ""), reverse=True)
+    return releases
+
+
+def refresh_ota_channel_latest(project: str, chip: str, channel: str) -> Dict[str, Any]:
+    pointer = channel_manifest_path(channel, project, chip)
+    releases = list_ota_release_meta(project=project, chip=chip, channel=channel)
+
+    if not releases:
+        remove_path_if_managed(pointer, (OTA_CHANNEL_DIR,))
+        try:
+            pointer.parent.rmdir()
+        except OSError:
+            pass
+        return {
+            "project": project,
+            "chip": chip,
+            "channel": channel,
+            "latest_release_id": None,
+            "manifest_url": None,
+        }
+
+    latest: Optional[Dict[str, Any]] = None
+    manifest_path: Optional[Path] = None
+    for candidate in releases:
+        candidate_manifest = OTA_RELEASE_DIR / str(candidate.get("release_id")) / "manifest.json"
+        if candidate_manifest.exists():
+            latest = candidate
+            manifest_path = candidate_manifest
+            break
+
+    if latest is None or manifest_path is None:
+        remove_path_if_managed(pointer, (OTA_CHANNEL_DIR,))
+        return {
+            "project": project,
+            "chip": chip,
+            "channel": channel,
+            "latest_release_id": None,
+            "manifest_url": None,
+        }
+
+    pointer.parent.mkdir(parents=True, exist_ok=True)
+    pointer.write_text(manifest_path.read_text(encoding="utf-8"), encoding="utf-8")
+    return {
+        "project": project,
+        "chip": chip,
+        "channel": channel,
+        "latest_release_id": latest.get("release_id"),
+        "manifest_url": latest.get("manifest_url"),
+    }
+
+
+def recompute_job_ota_release_state(job_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not job_id:
+        return None
+
+    remaining = list_ota_release_meta(job_id=job_id)
+    try:
+        load_job(job_id)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return {"job_id": job_id, "job_exists": False, "published": bool(remaining)}
+        raise
+
+    if remaining:
+        latest = remaining[0]
+        update_job(
+            job_id,
+            ota_manifest_url=latest.get("manifest_url"),
+            ota_firmware_url=latest.get("firmware_url"),
+            ota_release_id=latest.get("release_id"),
+        )
+        return {
+            "job_id": job_id,
+            "job_exists": True,
+            "published": True,
+            "release_id": latest.get("release_id"),
+            "manifest_url": latest.get("manifest_url"),
+            "firmware_url": latest.get("firmware_url"),
+        }
+
+    update_job(job_id, ota_manifest_url=None, ota_firmware_url=None, ota_release_id=None)
+    return {"job_id": job_id, "job_exists": True, "published": False}
+
+
 def load_workspaces_config() -> Dict[str, Dict[str, Any]]:
     if not WORKSPACES_CONFIG.exists():
         raise HTTPException(status_code=500, detail="Workspaces config not found")
@@ -902,18 +1017,33 @@ def list_ota_releases(project: Optional[str] = None, chip: Optional[str] = None)
         project = safe_name(project, "project")
     if chip:
         chip = safe_name(chip, "chip")
-    releases = []
-    for meta_path in sorted(OTA_RELEASE_DIR.glob("*/meta.json"), reverse=True):
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if project and meta.get("project") != project:
-            continue
-        if chip and meta.get("chip") != chip:
-            continue
-        releases.append(meta)
-    return {"releases": releases}
+    return {"releases": list_ota_release_meta(project=project, chip=chip)}
+
+
+@app.delete("/api/ota/releases/{release_id}")
+def delete_ota_release(release_id: str):
+    release_id = safe_name(release_id, "release_id")
+    meta = load_ota_release_meta(release_id)
+    project = safe_name(str(meta.get("project") or ""), "project")
+    chip = safe_name(str(meta.get("chip") or ""), "chip")
+    channel = safe_name(str(meta.get("channel") or ""), "channel")
+    job_id = str(meta.get("job_id") or "")
+
+    release_dir = OTA_RELEASE_DIR / release_id
+    remove_path_if_managed(release_dir, (OTA_RELEASE_DIR,))
+
+    latest = refresh_ota_channel_latest(project, chip, channel)
+    job_state = recompute_job_ota_release_state(job_id)
+
+    return {
+        "deleted_release_id": release_id,
+        "project": project,
+        "chip": chip,
+        "channel": channel,
+        "job_id": job_id or None,
+        "latest": latest,
+        "job_state": job_state,
+    }
 
 @app.get("/api/artifacts/{filename}")
 def download_artifact(filename: str):

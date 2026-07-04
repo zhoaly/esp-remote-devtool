@@ -37,6 +37,38 @@ function normalizeOtaVersionForInput(version) {
     return normalized;
 }
 
+function sortReleasesNewestFirst(releases) {
+    return [...releases].sort((a, b) => {
+        const left = String(a.created_at || a.release_id || "");
+        const right = String(b.created_at || b.release_id || "");
+        return right.localeCompare(left);
+    });
+}
+
+function releasesForJob(jobId) {
+    if (!jobId) return [];
+    return sortReleasesNewestFirst(otaReleases.filter((release) => release.job_id === jobId));
+}
+
+function latestReleaseForJob(jobId) {
+    return releasesForJob(jobId)[0] || null;
+}
+
+function releaseForJob(job) {
+    if (!job) return null;
+    if (job.ota_release_id) {
+        const exact = otaReleases.find((release) => release.release_id === job.ota_release_id);
+        if (exact) return exact;
+    }
+    return latestReleaseForJob(job.job_id);
+}
+
+function applyReleaseUrls(release, job) {
+    currentManifestUrl = release?.manifest_url || job?.ota_manifest_url || null;
+    currentManifestDirectUrl = release?.manifest_direct_url || null;
+    currentFirmwareUrl = release?.firmware_url || job?.ota_firmware_url || null;
+}
+
 function validateOtaForm() {
     if (!currentJobId || !currentJob) {
         return "请选择可发布的构建任务。";
@@ -89,6 +121,7 @@ function renderSelectedJobStatus() {
 
     const publishable = Boolean(currentJob.ota_publishable);
     const limit = currentJob.ota_partition_limit || 0;
+    const release = releaseForJob(currentJob);
     const lines = [
         `Job ID: ${currentJob.job_id}`,
         `项目: ${currentJob.project_name || "-"}`,
@@ -97,6 +130,8 @@ function renderSelectedJobStatus() {
         `App Bin: ${currentJob.ota_app_bin_name || "未识别"}`,
         `App Size: ${currentJob.ota_app_size || 0} / ${limit} bytes`,
         `App SHA256: ${currentJob.ota_app_sha256 || "-"}`,
+        release ? `已发布 Release: ${release.release_id || "-"}` : "已发布 Release: -",
+        release ? `已发布 Channel/Version: ${release.channel || "-"} / ${release.version || "-"}` : "已发布 Channel/Version: -",
         publishable ? "状态: 可发布 OTA" : "状态: 不可发布 OTA",
     ];
     setOtaStatus(lines.join("\n"), publishable ? "success" : "failed");
@@ -108,13 +143,16 @@ function selectOtaJob(jobId) {
 
     currentJobId = job.job_id;
     currentJob = job;
-    currentManifestUrl = job.ota_manifest_url || null;
-    currentFirmwareUrl = job.ota_firmware_url || null;
-    currentManifestDirectUrl = null;
+    const release = releaseForJob(job);
+    applyReleaseUrls(release, job);
 
     const versionInput = document.getElementById("otaVersion");
     if (versionInput && !versionInput.value.trim()) {
         versionInput.value = normalizeOtaVersionForInput(job.project_version);
+    }
+    const minVersionInput = document.getElementById("otaMinVersion");
+    if (minVersionInput && !minVersionInput.value.trim()) {
+        minVersionInput.value = "0.0.0";
     }
 
     const publishBtn = document.getElementById("otaPublishBtn");
@@ -123,13 +161,24 @@ function selectOtaJob(jobId) {
     updateSelectedJobChrome();
     renderSelectedJobStatus();
     renderOtaJobs();
-    renderReleaseResult(null);
+    renderReleaseResult(release);
+}
+
+function syncCurrentOtaSelection() {
+    if (!currentJob) return;
+
+    const release = releaseForJob(currentJob);
+    applyReleaseUrls(release, currentJob);
+    updateSelectedJobChrome();
+    renderSelectedJobStatus();
+    renderOtaJobs();
+    renderReleaseResult(release);
 }
 
 function jobStatusBadge(job) {
     if (job.status !== "success") return '<span class="tag failed">构建失败</span>';
     if (!job.ota_publishable) return '<span class="tag failed">不可发布</span>';
-    if (job.ota_release_id) return '<span class="tag success">已发布</span>';
+    if (releaseForJob(job)) return '<span class="tag success">已发布</span>';
     return '<span class="tag success">可发布</span>';
 }
 
@@ -185,8 +234,12 @@ async function loadOtaJobs() {
             const refreshed = otaJobs.find((job) => job.job_id === currentJobId);
             if (refreshed) {
                 currentJob = refreshed;
+                const release = releaseForJob(refreshed);
+                applyReleaseUrls(release, refreshed);
                 updateSelectedJobChrome();
                 renderSelectedJobStatus();
+                renderOtaJobs();
+                renderReleaseResult(release);
             }
         }
     } catch (err) {
@@ -272,6 +325,31 @@ async function publishOtaRelease() {
     }
 }
 
+function copyTextWithTextarea(value) {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "0";
+    textarea.style.left = "0";
+    textarea.style.width = "1px";
+    textarea.style.height = "1px";
+    textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    let copied = false;
+    try {
+        copied = document.execCommand("copy");
+    } finally {
+        document.body.removeChild(textarea);
+    }
+    return copied;
+}
+
 async function copyTextValue(value, label) {
     if (!value) {
         setOtaStatus(`${label} 为空，无法复制。`, "failed");
@@ -279,10 +357,17 @@ async function copyTextValue(value, label) {
     }
 
     try {
-        if (!navigator.clipboard) throw new Error("Clipboard API unavailable");
-        await navigator.clipboard.writeText(value);
+        if (window.isSecureContext && navigator.clipboard) {
+            await navigator.clipboard.writeText(value);
+        } else if (!copyTextWithTextarea(value)) {
+            throw new Error("Fallback copy failed");
+        }
         setOtaStatus(`已复制 ${label}\n${value}`, "success");
     } catch {
+        if (copyTextWithTextarea(value)) {
+            setOtaStatus(`已复制 ${label}\n${value}`, "success");
+            return;
+        }
         setOtaStatus(`无法自动复制 ${label}，请手动复制：\n${value}`, "failed");
     }
 }
@@ -300,11 +385,12 @@ function renderOtaReleases() {
     if (!body) return;
 
     if (!otaReleases.length) {
-        body.innerHTML = '<tr><td colspan="7">暂无 OTA 发布记录。</td></tr>';
+        body.innerHTML = '<tr><td colspan="8">暂无 OTA 发布记录。</td></tr>';
         return;
     }
 
     body.innerHTML = otaReleases.map((release) => {
+        const releaseId = escapeHtml(release.release_id || "");
         const manifest = release.manifest_url
             ? `<a href="${escapeHtml(release.manifest_url)}" target="_blank">latest</a>`
             : "-";
@@ -323,31 +409,74 @@ function renderOtaReleases() {
                 <td>${escapeHtml(release.created_at || "")}</td>
                 <td>${escapeHtml(release.job_id || "")}</td>
                 <td>${manifest} / ${direct} / ${firmware}</td>
+                <td>
+                    <button class="secondary compact-button danger-button" type="button" onclick="deleteOtaRelease('${releaseId}')">删除</button>
+                </td>
             </tr>
         `;
     }).join("");
 }
 
+async function deleteOtaRelease(releaseId) {
+    const release = otaReleases.find((item) => item.release_id === releaseId);
+    const label = release
+        ? `${release.channel || "-"} / ${release.project || "-"} / ${release.version || "-"}`
+        : releaseId;
+
+    if (!window.confirm(`确认删除 OTA Release ${releaseId}？\n${label}\n\n此操作会删除该 release 的 manifest 和 app.bin。`)) {
+        return;
+    }
+
+    try {
+        const data = await apiDelete("/api/ota/releases/" + encodeURIComponent(releaseId));
+        await loadOtaReleases();
+        await loadOtaJobs();
+        syncCurrentOtaSelection();
+
+        const latest = data.latest || {};
+        const jobState = data.job_state || {};
+        const latestLine = latest.latest_release_id
+            ? `Latest 已回退到: ${latest.latest_release_id}`
+            : "Latest 已清空";
+        const jobLine = jobState.job_exists === false
+            ? "原构建记录不存在，已跳过构建状态同步"
+            : jobState.published
+                ? `当前构建仍已发布: ${jobState.release_id || "-"}`
+                : "当前构建已回到可发布状态";
+
+        setOtaStatus([
+            "OTA Release 删除成功",
+            `Deleted Release ID: ${data.deleted_release_id}`,
+            latestLine,
+            jobLine,
+        ].join("\n"), "success");
+    } catch (err) {
+        setOtaStatus(`删除 OTA Release 失败\n${err.message}`, "failed");
+    }
+}
+
 async function loadOtaReleases() {
     const body = document.getElementById("otaReleasesBody");
-    if (body) body.innerHTML = '<tr><td colspan="7">加载中...</td></tr>';
+    if (body) body.innerHTML = '<tr><td colspan="8">加载中...</td></tr>';
 
     try {
         const data = await apiGet("/api/ota/releases");
         otaReleases = data.releases || [];
         renderOtaReleases();
+        syncCurrentOtaSelection();
     } catch (err) {
-        if (body) body.innerHTML = `<tr><td colspan="7">加载失败：${escapeHtml(err.message)}</td></tr>`;
+        if (body) body.innerHTML = `<tr><td colspan="8">加载失败：${escapeHtml(err.message)}</td></tr>`;
     }
 }
 
-function initOtaPage() {
+async function initOtaPage() {
     if (!isOtaPage()) return;
 
     handleOtaChannelChange();
     updateSelectedJobChrome();
-    loadOtaJobs();
-    loadOtaReleases();
+    await loadOtaReleases();
+    await loadOtaJobs();
+    syncCurrentOtaSelection();
 }
 
 document.addEventListener("DOMContentLoaded", initOtaPage);

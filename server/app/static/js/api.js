@@ -14,6 +14,12 @@ async function apiPostJson(path, body) {
     return await resp.json();
 }
 
+async function apiDelete(path) {
+    const resp = await fetch(REMOTE_BASE + path, { method: "DELETE" });
+    if (!resp.ok) throw new Error(await parseErrorResponse(resp));
+    return await resp.json();
+}
+
 async function apiGetText(path) {
     const resp = await fetch(REMOTE_BASE + path);
     if (!resp.ok) throw new Error(await parseErrorResponse(resp));
