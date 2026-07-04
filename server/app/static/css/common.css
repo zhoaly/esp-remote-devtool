@@ -52,11 +52,17 @@
 
         .hero,
         .panel {
+            position: relative;
+            overflow: visible;
             background: var(--panel);
             border: 1px solid var(--line);
             border-radius: var(--radius);
             box-shadow: var(--shadow);
             backdrop-filter: blur(18px);
+        }
+
+        .panel.select-layer-active {
+            z-index: 1000;
         }
 
         .hero {
@@ -144,8 +150,13 @@
         }
 
         .field {
+            position: relative;
             display: grid;
             gap: 8px;
+        }
+
+        .field.select-layer-active {
+            z-index: 1001;
         }
 
         .field.full {
@@ -219,6 +230,10 @@
             width: 100%;
         }
 
+        .custom-select.open {
+            z-index: 1002;
+        }
+
         .custom-select-trigger {
             width: 100%;
             min-height: 46px;
@@ -269,7 +284,7 @@
 
         .custom-select-menu {
             position: absolute;
-            z-index: 20;
+            z-index: 1003;
             top: calc(100% + 8px);
             left: 0;
             right: 0;

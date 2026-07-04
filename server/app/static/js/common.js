@@ -72,10 +72,17 @@ function closeCustomSelects(except = null) {
     document.querySelectorAll(".custom-select.open").forEach((select) => {
         if (select !== except) {
             select.classList.remove("open");
+            setSelectLayer(select, false);
             const trigger = select.querySelector(".custom-select-trigger");
             if (trigger) trigger.setAttribute("aria-expanded", "false");
         }
     });
+}
+
+function setSelectLayer(custom, active) {
+    custom.classList.toggle("select-layer-active", active);
+    custom.closest(".field")?.classList.toggle("select-layer-active", active);
+    custom.closest(".panel")?.classList.toggle("select-layer-active", active);
 }
 
 function refreshCustomSelect(select) {
@@ -104,6 +111,7 @@ function refreshCustomSelect(select) {
             select.dispatchEvent(new Event("change", { bubbles: true }));
             refreshCustomSelect(select);
             custom.classList.remove("open");
+            setSelectLayer(custom, false);
             trigger.setAttribute("aria-expanded", "false");
         });
 
@@ -142,12 +150,14 @@ function enhanceSelect(select) {
         const isOpen = custom.classList.contains("open");
         closeCustomSelects(custom);
         custom.classList.toggle("open", !isOpen);
+        setSelectLayer(custom, !isOpen);
         trigger.setAttribute("aria-expanded", String(!isOpen));
     });
 
     trigger.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
             custom.classList.remove("open");
+            setSelectLayer(custom, false);
             trigger.setAttribute("aria-expanded", "false");
         }
         if (event.key === "Enter" || event.key === " ") {
