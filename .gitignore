@@ -23,6 +23,7 @@ server/data/workspaces/*
 server/data/artifacts/*
 server/data/logs/*
 server/data/jobs/*
+server/data/ota/*
 
 !server/data/.gitkeep
 !server/data/uploads/.gitkeep
