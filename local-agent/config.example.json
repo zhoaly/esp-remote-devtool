@@ -7,6 +7,7 @@
   "port": 8765,
   "allowed_origins": [
     "http://your-server:8000",
+    "http://esp-build-v6:8000",
     "http://127.0.0.1:8000",
     "http://localhost:8000"
   ]

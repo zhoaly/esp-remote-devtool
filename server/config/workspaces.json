@@ -6,7 +6,11 @@
       "project_type": "esp_idf",
       "project_name": "ESP32_S3_wifi_ble_hub",
       "target": "esp32s3",
-      "idf_image": "espressif/idf:v6.0.1"
+      "idf_image": "espressif/idf:v6.0.1",
+      "idf_images": [
+        "espressif/idf:v5.4.2",
+        "espressif/idf:v6.0.1"
+      ]
     }
   }
 }

@@ -11,4 +11,8 @@ For dual-stack access on hosts where the app is bound to IPv4, keep
 startup script will run the main server on IPv4 and a local IPv6-only TCP proxy
 on the same port.
 
+To control the ESP-IDF versions shown on the build page, set
+`ESP_ALLOWED_IDF_IMAGES` to a comma-separated list of Docker images. Keep
+`ESP_ALLOW_CUSTOM_IDF_IMAGE=1` if users may type a custom image name.
+
 Runtime data is stored under `server/data/` and is intentionally excluded from Git.

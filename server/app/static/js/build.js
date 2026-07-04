@@ -1,51 +1,165 @@
 let remoteWorkspaces = [];
+let idfImageConfig = {
+    default_idf_image: "espressif/idf:v6.0.1",
+    allowed_idf_images: ["espressif/idf:v6.0.1"],
+    allow_custom: true,
+};
+
+function uniqueValues(values) {
+    const seen = new Set();
+    return values.filter((value) => {
+        const item = String(value || "").trim();
+        if (!item || seen.has(item)) return false;
+        seen.add(item);
+        return true;
+    });
+}
+
+function selectedWorkspace() {
+    const workspaceId = document.getElementById("remoteWorkspace")?.value;
+    return remoteWorkspaces.find((workspace) => workspace.workspace_id === workspaceId) || null;
+}
+
+function currentIdfImageOptions() {
+    const sourceMode = document.getElementById("sourceMode").value;
+    const workspace = sourceMode === "remote_workspace" ? selectedWorkspace() : null;
+    const workspaceImages = Array.isArray(workspace?.idf_images) ? workspace.idf_images : [];
+    const values = workspaceImages.length
+        ? workspaceImages
+        : idfImageConfig.allowed_idf_images;
+    return uniqueValues(values);
+}
+
 function handleSourceModeChange() {
-            const sourceMode = document.getElementById("sourceMode").value;
-            const isRemoteWorkspace = sourceMode === "remote_workspace";
-            document.getElementById("remoteWorkspaceField").style.display = isRemoteWorkspace ? "grid" : "none";
-            document.querySelectorAll(".local-upload-field").forEach((field) => {
-                field.style.display = isRemoteWorkspace ? "none" : "grid";
-            });
-        }
+    const sourceMode = document.getElementById("sourceMode").value;
+    const isRemoteWorkspace = sourceMode === "remote_workspace";
+    document.getElementById("remoteWorkspaceField").style.display = isRemoteWorkspace ? "grid" : "none";
+    document.querySelectorAll(".local-upload-field").forEach((field) => {
+        field.style.display = isRemoteWorkspace ? "none" : "grid";
+    });
+    renderIdfImageOptions();
+}
 
-        function renderWorkspaces(workspaces) {
-            const select = document.getElementById("remoteWorkspace");
-            const hint = document.getElementById("remoteWorkspaceHint");
-            select.innerHTML = "";
+function handleIdfImageChange() {
+    const select = document.getElementById("idfImageSelect");
+    const custom = document.getElementById("idfImageCustom");
+    const isCustom = select.value === "__custom__";
+    custom.style.display = isCustom ? "block" : "none";
+    if (isCustom && !custom.value.trim()) {
+        custom.value = idfImageConfig.default_idf_image || "espressif/idf:v6.0.1";
+    }
+}
 
-            if (!workspaces.length) {
-                const opt = document.createElement("option");
-                opt.value = "";
-                opt.textContent = "未配置可用远端工作区";
-                select.appendChild(opt);
-                hint.textContent = "远端 Server 当前没有返回可用工作区，请检查 server/config/workspaces.json。";
-                return;
-            }
+function getSelectedIdfImage() {
+    const select = document.getElementById("idfImageSelect");
+    if (select.value === "__custom__") {
+        const custom = document.getElementById("idfImageCustom").value.trim();
+        if (!custom) throw new Error("请输入 ESP-IDF Docker 镜像");
+        return custom;
+    }
+    return select.value;
+}
 
-            workspaces.forEach((workspace) => {
-                const opt = document.createElement("option");
-                opt.value = workspace.workspace_id;
-                opt.textContent = `${workspace.display_name || workspace.workspace_id} (${workspace.target || "unknown"})`;
-                opt.dataset.projectName = workspace.project_name || "";
-                opt.dataset.idfImage = workspace.idf_image || "";
-                opt.dataset.target = workspace.target || "";
-                select.appendChild(opt);
-            });
+function renderIdfImageOptions(preferredValue = "") {
+    const select = document.getElementById("idfImageSelect");
+    const custom = document.getElementById("idfImageCustom");
+    const hint = document.getElementById("idfImageHint");
+    const previousValue = preferredValue || getSelectedIdfImageSafe();
+    const images = currentIdfImageOptions();
 
-            hint.textContent = "远端固定工作区构建会直接使用服务器白名单路径，不会读取 Windows 本地工程路径。";
-        }
+    select.innerHTML = "";
+    images.forEach((image) => {
+        const opt = document.createElement("option");
+        opt.value = image;
+        opt.textContent = image.replace("espressif/idf:", "ESP-IDF ");
+        select.appendChild(opt);
+    });
 
-        async function loadWorkspaces() {
-            try {
-                const data = await apiGet("/api/workspaces");
-                remoteWorkspaces = data.workspaces || [];
-                renderWorkspaces(remoteWorkspaces);
-            } catch (err) {
-                remoteWorkspaces = [];
-                renderWorkspaces([]);
-                document.getElementById("remoteWorkspaceHint").textContent = `加载远端工作区失败: ${err.message}`;
-            }
-        }
+    if (idfImageConfig.allow_custom) {
+        const opt = document.createElement("option");
+        opt.value = "__custom__";
+        opt.textContent = "自定义 Docker 镜像";
+        select.appendChild(opt);
+    }
+
+    const defaultValue = images.includes(idfImageConfig.default_idf_image)
+        ? idfImageConfig.default_idf_image
+        : images[0];
+
+    if (images.includes(previousValue)) {
+        select.value = previousValue;
+    } else if (idfImageConfig.allow_custom && previousValue) {
+        select.value = "__custom__";
+        custom.value = previousValue;
+    } else if (defaultValue) {
+        select.value = defaultValue;
+    }
+
+    hint.textContent = idfImageConfig.allow_custom
+        ? "可选择预设版本，也可输入完整 Docker 镜像名。"
+        : "只能选择服务器允许的 ESP-IDF Docker 镜像。";
+    handleIdfImageChange();
+}
+
+function getSelectedIdfImageSafe() {
+    try {
+        return getSelectedIdfImage();
+    } catch {
+        return idfImageConfig.default_idf_image || "espressif/idf:v6.0.1";
+    }
+}
+
+function renderWorkspaces(workspaces) {
+    const select = document.getElementById("remoteWorkspace");
+    const hint = document.getElementById("remoteWorkspaceHint");
+    select.innerHTML = "";
+
+    if (!workspaces.length) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "未配置可用远端工作区";
+        select.appendChild(opt);
+        hint.textContent = "远端 Server 当前没有返回可用工作区，请检查 server/config/workspaces.json。";
+        renderIdfImageOptions();
+        return;
+    }
+
+    workspaces.forEach((workspace) => {
+        const opt = document.createElement("option");
+        opt.value = workspace.workspace_id;
+        opt.textContent = `${workspace.display_name || workspace.workspace_id} (${workspace.target || "unknown"})`;
+        opt.dataset.projectName = workspace.project_name || "";
+        opt.dataset.idfImage = workspace.idf_image || "";
+        opt.dataset.target = workspace.target || "";
+        select.appendChild(opt);
+    });
+
+    select.onchange = () => renderIdfImageOptions(select.selectedOptions[0]?.dataset.idfImage || "");
+    hint.textContent = "远端固定工作区构建会直接使用服务器白名单路径，不会读取 Windows 本地工程路径。";
+    renderIdfImageOptions(select.selectedOptions[0]?.dataset.idfImage || "");
+}
+
+async function loadIdfImages() {
+    try {
+        idfImageConfig = await apiGet("/api/idf-images");
+        renderIdfImageOptions(idfImageConfig.default_idf_image);
+    } catch (err) {
+        document.getElementById("idfImageHint").textContent = `加载 IDF 版本列表失败: ${err.message}`;
+        renderIdfImageOptions();
+    }
+}
+
+async function loadWorkspaces() {
+    try {
+        const data = await apiGet("/api/workspaces");
+        remoteWorkspaces = data.workspaces || [];
+        renderWorkspaces(remoteWorkspaces);
+    } catch (err) {
+        remoteWorkspaces = [];
+        renderWorkspaces([]);
+        document.getElementById("remoteWorkspaceHint").textContent = `加载远端工作区失败: ${err.message}`;
+    }
+}
 
 async function startBuild() {
             const startBtn = document.getElementById("startBtn");
@@ -73,11 +187,12 @@ async function startBuild() {
                     if (!workspaceId) {
                         throw new Error("请选择可用的远端工作区");
                     }
+                    const idfImage = getSelectedIdfImage();
 
                     document.getElementById("buildLogBox").textContent = "准备调用远端工作区构建接口...";
                     setBuildStatus("正在请求远端 Server 直接从固定工作区构建...");
 
-                    resp = { ok: true, json: async () => await apiPostJson("/api/build/workspace", { workspace_id: workspaceId }) };
+                    resp = { ok: true, json: async () => await apiPostJson("/api/build/workspace", { workspace_id: workspaceId, idf_image: idfImage }) };
                     successMessage = "远端工作区构建已启动，开始轮询远端构建状态...";
                 } else {
                     document.getElementById("buildLogBox").textContent = "准备调用本地 Agent...";
@@ -86,7 +201,7 @@ async function startBuild() {
                     const payload = {
                         project_path: document.getElementById("projectPath").value.trim(),
                         project_name: document.getElementById("projectName").value.trim(),
-                        idf_image: document.getElementById("idfImage").value.trim(),
+                        idf_image: getSelectedIdfImage(),
                         target: document.getElementById("target").value
                     };
 
@@ -177,4 +292,10 @@ async function refreshBuildLog() {
             }
         }
 
-document.addEventListener("DOMContentLoaded", () => { if (document.getElementById("sourceMode")) { loadWorkspaces(); handleSourceModeChange(); } });
+document.addEventListener("DOMContentLoaded", () => {
+    if (document.getElementById("sourceMode")) {
+        loadIdfImages();
+        loadWorkspaces();
+        handleSourceModeChange();
+    }
+});

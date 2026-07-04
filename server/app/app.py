@@ -41,11 +41,21 @@ PACKAGE_SCRIPT = BASE_DIR / "scripts" / "package_firmware.sh"
 DEFAULT_PROJECT_NAME = os.getenv("ESP_DEFAULT_PROJECT_NAME", "ESP32_S3_wifi_ble_hub")
 DEFAULT_IDF_IMAGE = os.getenv("ESP_DEFAULT_IDF_IMAGE", "espressif/idf:v6.0.1")
 DEFAULT_TARGET = os.getenv("ESP_DEFAULT_TARGET", "esp32s3")
+DEFAULT_ALLOWED_IDF_IMAGES = [
+    image.strip()
+    for image in os.getenv(
+        "ESP_ALLOWED_IDF_IMAGES",
+        "espressif/idf:v5.2.3,espressif/idf:v5.3.3,espressif/idf:v5.4.2,espressif/idf:v6.0.1",
+    ).split(",")
+    if image.strip()
+]
+ALLOW_CUSTOM_IDF_IMAGE = os.getenv("ESP_ALLOW_CUSTOM_IDF_IMAGE", "1").lower() in {"1", "true", "yes", "on"}
 MAX_UPLOAD_SIZE = int(os.getenv("ESP_MAX_UPLOAD_SIZE_MB", "200")) * 1024 * 1024
 MAX_BUILD_RECORDS = int(os.getenv("ESP_MAX_BUILD_RECORDS", "100"))
 OTA_APP_PARTITION_SIZE = int(os.getenv("ESP_OTA_APP_PARTITION_SIZE", str(6 * 1024 * 1024)))
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 VERSION_SHORT_RE = re.compile(r"^\d+\.\d+$")
+IDF_IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$")
 
 BUILD_LOCK = threading.Lock()
 
@@ -231,6 +241,42 @@ def safe_name(value: str, field: str) -> str:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", value or ""):
         raise HTTPException(status_code=400, detail=f"Invalid {field}")
     return value
+
+
+def unique_strings(values: List[Any]) -> List[str]:
+    result: List[str] = []
+    seen = set()
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        item = value.strip()
+        if item and item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
+def configured_idf_images(extra: Optional[List[Any]] = None) -> List[str]:
+    values: List[Any] = [DEFAULT_IDF_IMAGE, *DEFAULT_ALLOWED_IDF_IMAGES]
+    if extra:
+        values.extend(extra)
+    return unique_strings(values)
+
+
+def validate_idf_image(idf_image: str, allowed_images: Optional[List[str]] = None) -> str:
+    image = (idf_image or DEFAULT_IDF_IMAGE).strip()
+    allowed = allowed_images or configured_idf_images()
+
+    if image in allowed:
+        return image
+
+    if not ALLOW_CUSTOM_IDF_IMAGE:
+        raise HTTPException(status_code=400, detail=f"IDF image is not allowed: {image}")
+
+    if not IDF_IMAGE_RE.fullmatch(image):
+        raise HTTPException(status_code=400, detail="Invalid IDF Docker image")
+
+    return image
 
 
 def parse_semver(version: str) -> Tuple[int, int, int]:
@@ -457,6 +503,12 @@ def get_workspace_config(workspace_id: str) -> Dict[str, Any]:
     return cfg
 
 
+def workspace_idf_images(cfg: Dict[str, Any]) -> List[str]:
+    configured = cfg.get("idf_images")
+    extra = configured if isinstance(configured, list) else []
+    return configured_idf_images([cfg.get("idf_image"), *extra])
+
+
 def resolve_workspace_project_dir(workspace_path: str) -> Path:
     workspace = Path(workspace_path).expanduser().resolve()
 
@@ -681,6 +733,15 @@ def index() -> Dict[str, str]:
     }
 
 
+@app.get("/api/idf-images")
+def list_idf_images():
+    return {
+        "default_idf_image": DEFAULT_IDF_IMAGE,
+        "allowed_idf_images": configured_idf_images(),
+        "allow_custom": ALLOW_CUSTOM_IDF_IMAGE,
+    }
+
+
 def ui_file(relative_path: str) -> FileResponse:
     page_file = STATIC_DIR / relative_path
 
@@ -737,6 +798,7 @@ def list_workspaces():
                 "project_name": cfg.get("project_name"),
                 "target": cfg.get("target"),
                 "idf_image": cfg.get("idf_image"),
+                "idf_images": workspace_idf_images(cfg),
             }
         )
 
@@ -751,7 +813,7 @@ async def build_from_workspace(payload: Dict[str, Any]):
     workspace_path = cfg["path"]
     project_name = cfg["project_name"]
     target = cfg["target"]
-    idf_image = cfg["idf_image"]
+    idf_image = validate_idf_image(str(payload.get("idf_image") or cfg["idf_image"]), workspace_idf_images(cfg))
     job_id = make_job_id()
     now = time.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -799,6 +861,8 @@ async def build_from_upload(
     idf_image: str = Form(DEFAULT_IDF_IMAGE),
     target: str = Form(DEFAULT_TARGET),
 ):
+    idf_image = validate_idf_image(idf_image)
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename")
 
