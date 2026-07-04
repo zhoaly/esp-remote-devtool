@@ -82,7 +82,15 @@
                 <div class="field full">
                     <label for="idfImageSelect">ESP-IDF 版本</label>
                     <select id="idfImageSelect" onchange="handleIdfImageChange()">
-                        <option value="espressif/idf:v6.0.1">espressif/idf:v6.0.1</option>
+                        <option value="espressif/idf:v6.0.1" selected>ESP-IDF v6.0.1</option>
+                        <option value="espressif/idf:v4.4.8">ESP-IDF v4.4.8</option>
+                        <option value="espressif/idf:v5.0.8">ESP-IDF v5.0.8</option>
+                        <option value="espressif/idf:v5.1.6">ESP-IDF v5.1.6</option>
+                        <option value="espressif/idf:v5.2.5">ESP-IDF v5.2.5</option>
+                        <option value="espressif/idf:v5.3.4">ESP-IDF v5.3.4</option>
+                        <option value="espressif/idf:v5.4.2">ESP-IDF v5.4.2</option>
+                        <option value="espressif/idf:v5.5.1">ESP-IDF v5.5.1</option>
+                        <option value="espressif/idf:v6.0.2">ESP-IDF v6.0.2</option>
                     </select>
                     <input id="idfImageCustom" value="espressif/idf:v6.0.1" style="display: none; margin-top: 10px;">
                     <div class="hint" id="idfImageHint">选择远端 Docker 构建使用的 ESP-IDF 镜像。</div>
@@ -111,6 +119,6 @@
 
     <script src="/static/js/common.js"></script>
     <script src="/static/js/api.js"></script>
-    <script src="/static/js/build.js?v=idf-image-select-20260704"></script>
+    <script src="/static/js/build.js?v=idf-image-select-20260704-more-idf"></script>
 </body>
 </html>
