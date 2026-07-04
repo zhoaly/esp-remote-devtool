@@ -6,4 +6,9 @@
 4. Copy `.env.example` to `.env` and adjust values if needed.
 5. Start the service with `./start_server.sh` or install systemd with `./install_systemd.sh`.
 
+For dual-stack access on hosts where the app is bound to IPv4, keep
+`ESP_SERVER_HOST=0.0.0.0` and set `ESP_SERVER_IPV6_PROXY=1` in `.env`. The
+startup script will run the main server on IPv4 and a local IPv6-only TCP proxy
+on the same port.
+
 Runtime data is stored under `server/data/` and is intentionally excluded from Git.
