@@ -99,6 +99,9 @@ function renderIdfImageOptions(preferredValue = "") {
         ? "可选择预设版本，也可输入完整 Docker 镜像名。"
         : "只能选择服务器允许的 ESP-IDF Docker 镜像。";
     handleIdfImageChange();
+    if (typeof refreshCustomSelect === "function") {
+        refreshCustomSelect(select);
+    }
 }
 
 function getSelectedIdfImageSafe() {
