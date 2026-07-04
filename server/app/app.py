@@ -45,7 +45,7 @@ DEFAULT_ALLOWED_IDF_IMAGES = [
     image.strip()
     for image in os.getenv(
         "ESP_ALLOWED_IDF_IMAGES",
-        "espressif/idf:v5.2.3,espressif/idf:v5.3.3,espressif/idf:v5.4.2,espressif/idf:v6.0.1",
+        "espressif/idf:v4.4.8,espressif/idf:v5.0.8,espressif/idf:v5.1.6,espressif/idf:v5.2.5,espressif/idf:v5.3.4,espressif/idf:v5.4.2,espressif/idf:v5.5.1,espressif/idf:v6.0.1,espressif/idf:v6.0.2",
     ).split(",")
     if image.strip()
 ]
