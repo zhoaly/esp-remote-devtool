@@ -53,6 +53,7 @@ ALLOW_CUSTOM_IDF_IMAGE = os.getenv("ESP_ALLOW_CUSTOM_IDF_IMAGE", "1").lower() in
 MAX_UPLOAD_SIZE = int(os.getenv("ESP_MAX_UPLOAD_SIZE_MB", "200")) * 1024 * 1024
 MAX_BUILD_RECORDS = int(os.getenv("ESP_MAX_BUILD_RECORDS", "100"))
 OTA_APP_PARTITION_SIZE = int(os.getenv("ESP_OTA_APP_PARTITION_SIZE", str(6 * 1024 * 1024)))
+OTA_PUBLIC_BASE_URL = os.getenv("ESP_OTA_PUBLIC_BASE_URL", "").strip().rstrip("/")
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 VERSION_SHORT_RE = re.compile(r"^\d+\.\d+$")
 IDF_IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$")
@@ -297,7 +298,8 @@ def normalize_ota_version(version: Optional[str]) -> Optional[str]:
 
 
 def absolute_url(request: Request, path: str) -> str:
-    return str(request.url_for("index")).rstrip("/") + path
+    base_url = OTA_PUBLIC_BASE_URL or str(request.url_for("index")).rstrip("/")
+    return base_url + path
 
 
 def read_project_version(project_dir: Path) -> Optional[str]:
