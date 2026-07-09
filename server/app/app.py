@@ -65,6 +65,7 @@ LVGL_DEFAULT_VERSION = os.getenv("LVGL_DEFAULT_VERSION", "9.x")
 LVGL_EMSDK_IMAGE = os.getenv("LVGL_EMSDK_IMAGE", "emscripten/emsdk:latest")
 LVGL_GIT_REPO = os.getenv("LVGL_GIT_REPO", "https://github.com/lvgl/lvgl.git")
 LVGL_GIT_REF = os.getenv("LVGL_GIT_REF", "v9.3.0")
+LVGL_SOURCE_DIR = os.getenv("LVGL_SOURCE_DIR", "").strip()
 LVGL_MAX_UPLOAD_SIZE = int(os.getenv("LVGL_MAX_UPLOAD_SIZE_MB", os.getenv("ESP_MAX_UPLOAD_SIZE_MB", "200"))) * 1024 * 1024
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 VERSION_SHORT_RE = re.compile(r"^\d+\.\d+$")
@@ -427,6 +428,7 @@ def prepare_lvgl_ui_scaffold(workspace: Path, manifest: Dict[str, Any], width: i
 
     source_lines = "\n".join(f"    {cmake_quote(item)}" for item in source_files)
     include_lines = "\n".join(f"    {item}" for item in include_paths)
+    lvgl_source_dir = "/lvgl_source" if LVGL_SOURCE_DIR else ""
 
     (web_project / "CMakeLists.txt").write_text(
         f"""cmake_minimum_required(VERSION 3.20)
@@ -437,15 +439,20 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXECUTABLE_SUFFIX ".html")
 set(LV_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
 set(LV_BUILD_DEMOS ON CACHE BOOL "" FORCE)
+set(LVGL_LOCAL_SOURCE_DIR {cmake_quote(lvgl_source_dir)} CACHE PATH "Local LVGL source directory mounted in the Emscripten container")
 
-include(FetchContent)
-FetchContent_Declare(
-    lvgl
-    GIT_REPOSITORY {cmake_quote(LVGL_GIT_REPO)}
-    GIT_TAG {cmake_quote(LVGL_GIT_REF)}
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(lvgl)
+if(LVGL_LOCAL_SOURCE_DIR AND EXISTS "${{LVGL_LOCAL_SOURCE_DIR}}/CMakeLists.txt")
+    add_subdirectory("${{LVGL_LOCAL_SOURCE_DIR}}" lvgl)
+else()
+    include(FetchContent)
+    FetchContent_Declare(
+        lvgl
+        GIT_REPOSITORY {cmake_quote(LVGL_GIT_REPO)}
+        GIT_TAG {cmake_quote(LVGL_GIT_REF)}
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(lvgl)
+endif()
 
 set(UI_SOURCES
 {source_lines}
@@ -1225,6 +1232,7 @@ def lvgl_build_worker(
                 log.write(f"LVGL version : {LVGL_DEFAULT_VERSION}\n")
                 log.write(f"Canvas       : {width}x{height}\n")
                 log.write(f"EMSDK image  : {LVGL_EMSDK_IMAGE}\n")
+                log.write(f"LVGL source  : {LVGL_SOURCE_DIR or 'FetchContent'}\n")
 
             update_job(
                 job_id,
@@ -1243,6 +1251,7 @@ def lvgl_build_worker(
                     LVGL_EMSDK_IMAGE,
                     str(width),
                     str(height),
+                    LVGL_SOURCE_DIR,
                 ],
                 log_path,
             )

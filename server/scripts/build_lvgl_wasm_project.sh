@@ -6,6 +6,7 @@ OUTPUT_DIR="$2"
 EMSDK_IMAGE="${3:-emscripten/emsdk:latest}"
 WIDTH="${4:-480}"
 HEIGHT="${5:-480}"
+LVGL_SOURCE_DIR="${6:-}"
 
 if [ ! -d "$PROJECT_DIR" ]; then
     echo "ERROR: project dir not found: $PROJECT_DIR"
@@ -25,16 +26,30 @@ echo "Project dir : $PROJECT_DIR"
 echo "Output dir  : $OUTPUT_DIR"
 echo "EMSDK image : $EMSDK_IMAGE"
 echo "Canvas      : ${WIDTH}x${HEIGHT}"
+echo "LVGL source : ${LVGL_SOURCE_DIR:-FetchContent}"
 echo "============================================"
 
-docker run --rm -i \
-    --user "$(id -u):$(id -g)" \
-    -e HOME=/tmp \
-    -e LVGL_SIM_WIDTH="$WIDTH" \
-    -e LVGL_SIM_HEIGHT="$HEIGHT" \
-    -v "$PROJECT_DIR:/project" \
-    -v "$OUTPUT_DIR:/out" \
-    -w /project \
+DOCKER_ARGS=(
+    --rm
+    -i
+    --user "$(id -u):$(id -g)"
+    -e HOME=/tmp
+    -e LVGL_SIM_WIDTH="$WIDTH"
+    -e LVGL_SIM_HEIGHT="$HEIGHT"
+    -v "$PROJECT_DIR:/project"
+    -v "$OUTPUT_DIR:/out"
+    -w /project
+)
+
+if [ -n "$LVGL_SOURCE_DIR" ]; then
+    if [ ! -f "$LVGL_SOURCE_DIR/CMakeLists.txt" ]; then
+        echo "ERROR: LVGL source dir is invalid: $LVGL_SOURCE_DIR"
+        exit 1
+    fi
+    DOCKER_ARGS+=(-v "$LVGL_SOURCE_DIR:/lvgl_source:ro")
+fi
+
+docker run "${DOCKER_ARGS[@]}" \
     "$EMSDK_IMAGE" \
     bash -lc '
         set -euo pipefail
