@@ -161,8 +161,9 @@ function setLvglPreview(previewUrl) {
     if (statusBadge) statusBadge.style.display = "none";
     frame.src = `${currentLvglPreviewUrl}?t=${Date.now()}`;
 
-    /* Remove shimmer once iframe loads, show live badge */
+    /* Strip Emscripten chrome from the preview iframe, then show live badge */
     frame.onload = function onPreviewLoad() {
+        stripEmscriptenChrome(frame);
         wrap.classList.remove("loading");
         if (statusBadge) statusBadge.style.display = "inline-flex";
         frame.onload = null;
@@ -181,10 +182,38 @@ function reloadLvglPreview() {
     if (statusBadge) statusBadge.style.display = "none";
     frame.src = `${currentLvglPreviewUrl}?t=${Date.now()}`;
     frame.onload = function onPreviewLoad() {
+        stripEmscriptenChrome(frame);
         wrap.classList.remove("loading");
         if (statusBadge) statusBadge.style.display = "inline-flex";
         frame.onload = null;
     };
+}
+
+/**
+ * Hide Emscripten-generated chrome (logo, controls, output) inside the
+ * same-origin preview iframe so only the LVGL canvas is visible.
+ */
+function stripEmscriptenChrome(frame) {
+    try {
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        if (!doc) return;
+        const style = doc.createElement("style");
+        style.textContent = `
+            #emscripten_logo { display: none !important; }
+            #controls       { display: none !important; }
+            #output         { display: none !important; }
+            body            { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+            .emscripten_border {
+                border: none !important;
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+            }
+        `;
+        doc.head.appendChild(style);
+    } catch (_) {
+        /* iframe may not be fully ready – skip silently */
+    }
 }
 
 async function startLvglBuild() {
