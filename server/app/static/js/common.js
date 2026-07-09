@@ -7,6 +7,22 @@ let currentJob = null;
 let currentManifestUrl = null;
 let pollTimer = null;
 
+const GLOBAL_NAV_ITEMS = [
+    { label: "HOME", href: "/home", exact: true },
+    { label: "ESP工具集", href: "/tools/esp", prefix: "/tools/esp" },
+    { label: "LVGL Simulator", href: "/tools/lvgl", prefix: "/tools/lvgl" },
+];
+
+const TOOL_SUB_NAV_ITEMS = {
+    esp: [
+        { label: "远端编译", href: "/tools/esp/build", exact: true },
+        { label: "本地烧录", href: "/tools/esp/flash", exact: true },
+        { label: "OTA 发布", href: "/tools/esp/ota", exact: true },
+        { label: "构建历史", href: "/tools/esp/jobs", exact: true },
+        { label: "设置", href: "/tools/esp/settings", exact: true },
+    ],
+};
+
 function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
@@ -61,7 +77,53 @@ function stopPolling() {
     }
 }
 
+function isEspFirmwareJob(job) {
+    return !job?.tool_type || job.tool_type === "esp_firmware";
+}
+
+function isNavItemActive(item, path) {
+    if (item.exact) return path === item.href;
+    if (item.prefix) return path === item.href || path.startsWith(item.prefix + "/");
+    return false;
+}
+
+function renderNavLinks(nav, items) {
+    const path = window.location.pathname;
+    nav.innerHTML = "";
+
+    items.forEach((item) => {
+        const link = document.createElement("a");
+        link.href = item.href;
+        link.textContent = item.label;
+        if (isNavItemActive(item, path)) link.classList.add("active");
+        nav.appendChild(link);
+    });
+}
+
+function renderAppNavigation() {
+    const topNav = document.querySelector(".top-nav");
+    if (!topNav) return;
+
+    renderNavLinks(topNav, GLOBAL_NAV_ITEMS);
+
+    const existingSubNav = document.querySelector(".tool-sub-nav");
+    if (!window.location.pathname.startsWith("/tools/esp")) {
+        if (existingSubNav) existingSubNav.remove();
+        return;
+    }
+
+    const subNav = existingSubNav || document.createElement("nav");
+    subNav.className = "tool-sub-nav";
+    subNav.setAttribute("aria-label", "ESP tool navigation");
+    renderNavLinks(subNav, TOOL_SUB_NAV_ITEMS.esp);
+
+    if (!existingSubNav) {
+        topNav.insertAdjacentElement("afterend", subNav);
+    }
+}
+
 function initCommonChrome() {
+    renderAppNavigation();
     setText("remoteBaseText", REMOTE_BASE + "/tools/esp");
     setText("remoteHostCard", REMOTE_BASE);
     setText("localAgentCard", LOCAL_AGENT);

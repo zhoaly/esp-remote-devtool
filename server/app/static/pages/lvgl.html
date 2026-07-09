@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LVGL Simulator - ZLYHUB</title>
+    <link rel="stylesheet" href="/static/css/common.css?v=nav-registry-20260709">
+</head>
+<body>
+    <div class="shell">
+        <nav class="top-nav">
+            <a href="/home">HOME</a>
+            <a href="/tools/esp">ESP工具集</a>
+            <a href="/tools/lvgl" class="active">LVGL Simulator</a>
+        </nav>
+
+        <section class="hero">
+            <div class="hero-top">
+                <div>
+                    <div class="eyebrow">LVGL WebAssembly Preview</div>
+                    <h1>Remote UI simulator.</h1>
+                </div>
+            </div>
+            <div class="hero-copy">
+                本地开发 LVGL UI，通过 Local Agent 上传源码，或直接选择远端工作区，在服务器上编译为 WebAssembly 后嵌入网页预览。
+            </div>
+            <div class="hero-grid">
+                <div class="stat">
+                    <div class="stat-label">Remote Host</div>
+                    <div class="stat-value" id="remoteHostCard"></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Local Agent</div>
+                    <div class="stat-value">http://127.0.0.1:8765</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Current Job</div>
+                    <div class="stat-value" id="lvglJobIdCard">idle</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>1. Project Setup</h2>
+            <div class="grid">
+                <div class="field full">
+                    <label for="lvglSourceMode">源码来源</label>
+                    <select id="lvglSourceMode" onchange="handleLvglSourceModeChange()">
+                        <option value="local_path" selected>本地上传构建</option>
+                        <option value="remote_workspace">远端固定工作区构建</option>
+                    </select>
+                    <div class="hint">本地模式要求 Local Agent 运行在 <code>http://127.0.0.1:8765</code>；远端模式只使用服务器白名单工作区。</div>
+                </div>
+
+                <div class="field full" id="lvglRemoteWorkspaceField" style="display: none;">
+                    <label for="lvglRemoteWorkspace">远端工作区</label>
+                    <select id="lvglRemoteWorkspace">
+                        <option value="">正在加载 LVGL 工作区...</option>
+                    </select>
+                    <div class="hint" id="lvglRemoteWorkspaceHint">页面加载时会读取 <code>/api/lvgl/workspaces</code>。</div>
+                </div>
+
+                <div class="field full lvgl-local-field">
+                    <label for="lvglProjectPath">Windows 本地 LVGL 项目路径</label>
+                    <input id="lvglProjectPath" placeholder="例如 C:\Users\13281\OneDrive\dev_projects\lvgl_ui_sim">
+                    <div class="hint">项目根目录需要包含 <code>CMakeLists.txt</code>，建议基于 LVGL 9.x Web/Emscripten 模板。</div>
+                </div>
+
+                <div class="field">
+                    <label for="lvglProjectName">项目名</label>
+                    <input id="lvglProjectName" value="lvgl_project">
+                </div>
+
+                <div class="field">
+                    <label for="lvglVersion">LVGL 版本</label>
+                    <input id="lvglVersion" value="9.x" disabled>
+                </div>
+
+                <div class="field">
+                    <label for="lvglWidth">预览宽度</label>
+                    <input id="lvglWidth" type="number" min="120" max="4096" value="480">
+                </div>
+
+                <div class="field">
+                    <label for="lvglHeight">预览高度</label>
+                    <input id="lvglHeight" type="number" min="120" max="4096" value="480">
+                </div>
+            </div>
+            <div class="actions">
+                <button id="lvglStartBtn" class="primary" type="button" onclick="startLvglBuild()">开始远端模拟构建</button>
+                <button class="secondary" type="button" onclick="refreshLvglLog()">刷新构建日志</button>
+                <button class="secondary" type="button" onclick="reloadLvglPreview()">刷新预览</button>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>2. Build Status</h2>
+            <div id="lvglStatusBox" class="status">等待开始。</div>
+            <div class="links" id="lvglLinkArea"></div>
+        </section>
+
+        <section class="logs lvgl-workbench">
+            <div class="panel">
+                <div class="panel-heading">
+                    <h2>3. Preview</h2>
+                    <span class="tag" id="lvglPreviewSize">480 x 480</span>
+                </div>
+                <div class="preview-frame-wrap" id="lvglPreviewWrap">
+                    <iframe id="lvglPreviewFrame" title="LVGL UI Preview"></iframe>
+                    <div class="preview-empty" id="lvglPreviewEmpty">构建成功后这里会显示 LVGL WebAssembly 预览。</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>4. Build Log</h2>
+                <div id="lvglLogBox" class="log-box">暂无构建日志。</div>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/js/common.js?v=nav-registry-20260709"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/lvgl.js?v=lvgl-simulator-20260709"></script>
+</body>
+</html>

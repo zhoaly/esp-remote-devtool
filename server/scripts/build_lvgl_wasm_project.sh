@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="$1"
+OUTPUT_DIR="$2"
+EMSDK_IMAGE="${3:-emscripten/emsdk:latest}"
+WIDTH="${4:-480}"
+HEIGHT="${5:-480}"
+
+if [ ! -d "$PROJECT_DIR" ]; then
+    echo "ERROR: project dir not found: $PROJECT_DIR"
+    exit 1
+fi
+
+if [ ! -f "$PROJECT_DIR/CMakeLists.txt" ]; then
+    echo "ERROR: CMakeLists.txt not found in LVGL project root: $PROJECT_DIR"
+    exit 1
+fi
+
+mkdir -p "$OUTPUT_DIR"
+rm -rf "$OUTPUT_DIR"/*
+
+echo "========== LVGL WebAssembly Build =========="
+echo "Project dir : $PROJECT_DIR"
+echo "Output dir  : $OUTPUT_DIR"
+echo "EMSDK image : $EMSDK_IMAGE"
+echo "Canvas      : ${WIDTH}x${HEIGHT}"
+echo "============================================"
+
+docker run --rm -i \
+    --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -e LVGL_SIM_WIDTH="$WIDTH" \
+    -e LVGL_SIM_HEIGHT="$HEIGHT" \
+    -v "$PROJECT_DIR:/project" \
+    -v "$OUTPUT_DIR:/out" \
+    -w /project \
+    "$EMSDK_IMAGE" \
+    bash -lc '
+        set -euo pipefail
+
+        rm -rf build_web
+        emcmake cmake -S . -B build_web \
+            -DLVGL_SIM_WIDTH="${LVGL_SIM_WIDTH}" \
+            -DLVGL_SIM_HEIGHT="${LVGL_SIM_HEIGHT}"
+        cmake --build build_web -j"$(nproc)"
+
+        copy_preview_dir() {
+            local candidate="$1"
+            if [ -f "$candidate/index.html" ]; then
+                cp -a "$candidate"/. /out/
+                return 0
+            fi
+            return 1
+        }
+
+        copy_preview_dir build_web ||
+        copy_preview_dir build_web/bin ||
+        copy_preview_dir build_web/dist ||
+        copy_preview_dir build_web/src ||
+        {
+            found_index="$(find build_web -maxdepth 4 -type f -name index.html | head -n 1)"
+            if [ -z "$found_index" ]; then
+                echo "ERROR: index.html not found in Emscripten build output"
+                exit 1
+            fi
+            cp -a "$(dirname "$found_index")"/. /out/
+        }
+
+        test -f /out/index.html
+    '
+
+echo "========== LVGL Build Finished =========="
+find "$OUTPUT_DIR" -maxdepth 2 -type f | sort

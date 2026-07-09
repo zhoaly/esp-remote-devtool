@@ -83,7 +83,7 @@ async function loadFlashJobs() {
     if (list) list.innerHTML = '<div class="empty-state">加载构建记录...</div>';
 
     try {
-        flashJobs = await apiGet("/api/jobs");
+        flashJobs = (await apiGet("/api/jobs")).filter(isEspFirmwareJob);
         renderFlashJobs();
 
         const refreshed = currentJobId

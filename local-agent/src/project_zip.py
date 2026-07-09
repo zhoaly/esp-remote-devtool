@@ -36,6 +36,17 @@ def validate_project_dir(project_dir: Path) -> None:
         raise ValueError("main/ or components/ directory not found")
 
 
+def validate_lvgl_project_dir(project_dir: Path) -> None:
+    if not project_dir.exists():
+        raise ValueError(f"Project path not found: {project_dir}")
+
+    if not project_dir.is_dir():
+        raise ValueError(f"Project path is not a directory: {project_dir}")
+
+    if not (project_dir / "CMakeLists.txt").exists():
+        raise ValueError("CMakeLists.txt not found in LVGL project root")
+
+
 def create_project_zip(
     project_dir: Path,
     exclude_dir_names: set[str],

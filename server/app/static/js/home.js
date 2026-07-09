@@ -79,8 +79,24 @@ function createToolCard(tool) {
     return card;
 }
 
+function renderHomeTitle(title) {
+    const el = document.getElementById("homeTitle");
+    if (!el) return;
+
+    const value = String(title || "ZLYHUB Developer Toolkit").trim();
+    const parts = value.startsWith("ZLYHUB")
+        ? ["ZLYHUB", value.slice("ZLYHUB".length).trim() || "Developer Toolkit"]
+        : [value];
+
+    el.replaceChildren(...parts.map((part) => {
+        const line = document.createElement("span");
+        line.textContent = part;
+        return line;
+    }));
+}
+
 function renderHomeRegistry(registry) {
-    setText("homeTitle", registry.title || "ZLYHUB开发工具集");
+    renderHomeTitle(registry.title);
     setText("homeSubtitle", registry.subtitle || "");
     setText("homeRegistryState", "loaded");
 

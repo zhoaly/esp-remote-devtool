@@ -1,7 +1,7 @@
 async function loadJobs() {
     const box = document.getElementById("jobsBody");
     try {
-        const jobs = await apiGet("/api/jobs");
+        const jobs = (await apiGet("/api/jobs")).filter(isEspFirmwareJob);
         box.innerHTML = "";
         jobs.forEach((job) => {
             const tr = document.createElement("tr");

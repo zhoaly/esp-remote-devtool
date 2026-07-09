@@ -219,7 +219,7 @@ async function loadOtaJobs() {
     if (list) list.innerHTML = '<div class="empty-state">加载构建记录...</div>';
 
     try {
-        otaJobs = await apiGet("/api/jobs");
+        otaJobs = (await apiGet("/api/jobs")).filter(isEspFirmwareJob);
         renderOtaJobs();
 
         if (!currentJobId) {

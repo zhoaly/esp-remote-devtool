@@ -30,6 +30,8 @@ ARTIFACT_DIR = DATA_DIR / "artifacts"
 OTA_DIR = DATA_DIR / "ota"
 OTA_RELEASE_DIR = OTA_DIR / "releases"
 OTA_CHANNEL_DIR = OTA_DIR / "channels"
+LVGL_DIR = DATA_DIR / "lvgl"
+LVGL_PREVIEW_DIR = LVGL_DIR / "previews"
 LOG_DIR = DATA_DIR / "logs"
 JOB_DIR = DATA_DIR / "jobs"
 STATIC_DIR = BASE_DIR / "app" / "static"
@@ -39,6 +41,7 @@ HOME_TOOLS_CONFIG = CONFIG_DIR / "home_tools.json"
 
 BUILD_SCRIPT = BASE_DIR / "scripts" / "build_uploaded_project.sh"
 PACKAGE_SCRIPT = BASE_DIR / "scripts" / "package_firmware.sh"
+LVGL_BUILD_SCRIPT = BASE_DIR / "scripts" / "build_lvgl_wasm_project.sh"
 
 DEFAULT_PROJECT_NAME = os.getenv("ESP_DEFAULT_PROJECT_NAME", "ESP32_S3_wifi_ble_hub")
 DEFAULT_IDF_IMAGE = os.getenv("ESP_DEFAULT_IDF_IMAGE", "espressif/idf:v6.0.1")
@@ -56,6 +59,11 @@ MAX_UPLOAD_SIZE = int(os.getenv("ESP_MAX_UPLOAD_SIZE_MB", "200")) * 1024 * 1024
 MAX_BUILD_RECORDS = int(os.getenv("ESP_MAX_BUILD_RECORDS", "100"))
 OTA_APP_PARTITION_SIZE = int(os.getenv("ESP_OTA_APP_PARTITION_SIZE", str(6 * 1024 * 1024)))
 OTA_PUBLIC_BASE_URL = os.getenv("ESP_OTA_PUBLIC_BASE_URL", "").strip().rstrip("/")
+LVGL_DEFAULT_WIDTH = int(os.getenv("LVGL_DEFAULT_WIDTH", "480"))
+LVGL_DEFAULT_HEIGHT = int(os.getenv("LVGL_DEFAULT_HEIGHT", "480"))
+LVGL_DEFAULT_VERSION = os.getenv("LVGL_DEFAULT_VERSION", "9.x")
+LVGL_EMSDK_IMAGE = os.getenv("LVGL_EMSDK_IMAGE", "emscripten/emsdk:latest")
+LVGL_MAX_UPLOAD_SIZE = int(os.getenv("LVGL_MAX_UPLOAD_SIZE_MB", os.getenv("ESP_MAX_UPLOAD_SIZE_MB", "200"))) * 1024 * 1024
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 VERSION_SHORT_RE = re.compile(r"^\d+\.\d+$")
 IDF_IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$")
@@ -72,7 +80,7 @@ DEFAULT_HOME_TOOL_REGISTRY: Dict[str, Any] = {
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-for directory in (UPLOAD_DIR, WORKSPACE_DIR, ARTIFACT_DIR, OTA_RELEASE_DIR, OTA_CHANNEL_DIR, LOG_DIR, JOB_DIR):
+for directory in (UPLOAD_DIR, WORKSPACE_DIR, ARTIFACT_DIR, OTA_RELEASE_DIR, OTA_CHANNEL_DIR, LVGL_PREVIEW_DIR, LOG_DIR, JOB_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -106,12 +114,16 @@ def remove_path_if_managed(path: Path, allowed_roots: Tuple[Path, ...]) -> None:
 
 def cleanup_job_record(job_id: str, data: Dict[str, Any], job_path: Path) -> None:
     managed_file_roots = (UPLOAD_DIR, ARTIFACT_DIR, LOG_DIR)
-    managed_workspace_roots = (WORKSPACE_DIR,)
+    managed_workspace_roots = (WORKSPACE_DIR, LVGL_PREVIEW_DIR)
 
     for field in ("upload_file", "artifact", "log"):
         value = data.get(field)
         if value:
             remove_path_if_managed(Path(str(value)), managed_file_roots)
+
+    preview_dir = data.get("preview_dir")
+    if preview_dir:
+        remove_path_if_managed(Path(str(preview_dir)), managed_workspace_roots)
 
     artifact_name = data.get("artifact_name")
     if artifact_name:
@@ -209,6 +221,73 @@ def find_project_root(workspace: Path) -> Path:
     return candidates[0][1]
 
 
+def find_lvgl_project_root(workspace: Path) -> Path:
+    if (workspace / "CMakeLists.txt").is_file():
+        return workspace
+
+    candidates: List[Tuple[int, Path]] = []
+    ignored_dirs = {"build", "build_web", ".git", ".pio", "managed_components"}
+
+    for cmake in workspace.rglob("CMakeLists.txt"):
+        project_dir = cmake.parent
+        if any(part in ignored_dirs for part in project_dir.relative_to(workspace).parts):
+            continue
+        depth = len(project_dir.relative_to(workspace).parts)
+        candidates.append((depth, project_dir))
+
+    if not candidates:
+        raise RuntimeError("LVGL CMake project root not found")
+
+    candidates.sort(key=lambda item: item[0])
+    return candidates[0][1]
+
+
+def resolve_lvgl_workspace_project_dir(workspace_path: str) -> Path:
+    workspace = Path(workspace_path).expanduser().resolve()
+
+    if not workspace.exists():
+        raise RuntimeError(f"Workspace path not found: {workspace}")
+
+    if not workspace.is_dir():
+        raise RuntimeError(f"Workspace path is not a directory: {workspace}")
+
+    return find_lvgl_project_root(workspace)
+
+
+def normalize_lvgl_dimension(value: Any, default: int, field: str) -> int:
+    try:
+        dimension = int(value if value not in (None, "") else default)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"{field} must be a number") from exc
+
+    if dimension < 120 or dimension > 4096:
+        raise HTTPException(status_code=400, detail=f"{field} must be between 120 and 4096")
+
+    return dimension
+
+
+def lvgl_preview_url(job_id: str) -> str:
+    return f"/api/lvgl/previews/{job_id}/index.html"
+
+
+def lvgl_preview_media_type(path: Path) -> Optional[str]:
+    return {
+        ".wasm": "application/wasm",
+        ".js": "application/javascript",
+        ".mjs": "application/javascript",
+        ".html": "text/html",
+        ".css": "text/css",
+        ".json": "application/json",
+        ".data": "application/octet-stream",
+    }.get(path.suffix.lower())
+
+
+def package_lvgl_preview(job_id: str, project_name: str, preview_dir: Path) -> Path:
+    artifact_base = ARTIFACT_DIR / f"{slug_name(project_name, 'lvgl_project')}_{job_id}_lvgl_preview"
+    archive_path = Path(shutil.make_archive(str(artifact_base), "zip", preview_dir))
+    return archive_path
+
+
 def run_command(command: List[str], log_path: Path) -> None:
     with log_path.open("a", encoding="utf-8") as log:
         log.write("\n")
@@ -251,6 +330,11 @@ def safe_name(value: str, field: str) -> str:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", value or ""):
         raise HTTPException(status_code=400, detail=f"Invalid {field}")
     return value
+
+
+def slug_name(value: str, fallback: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", value or "").strip("._-")
+    return slug or fallback
 
 
 def unique_strings(values: List[Any]) -> List[str]:
@@ -554,6 +638,53 @@ def get_workspace_config(workspace_id: str) -> Dict[str, Any]:
     return cfg
 
 
+def get_lvgl_workspace_config(workspace_id: str) -> Dict[str, Any]:
+    if not workspace_id:
+        raise HTTPException(status_code=400, detail="Missing workspace_id")
+
+    workspaces = load_workspaces_config()
+    if workspace_id not in workspaces:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    cfg = workspaces[workspace_id]
+    if not isinstance(cfg, dict):
+        raise HTTPException(status_code=500, detail=f"Workspace config must be an object: {workspace_id}")
+
+    project_type = str(cfg.get("project_type") or "")
+    if project_type not in {"lvgl", "lvgl_simulator"}:
+        raise HTTPException(status_code=400, detail=f"Workspace is not an LVGL simulator workspace: {workspace_id}")
+
+    if not cfg.get("path"):
+        raise HTTPException(status_code=500, detail=f"Workspace config missing 'path': {workspace_id}")
+
+    return cfg
+
+
+def list_lvgl_workspace_items() -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+
+    for workspace_id, cfg in load_workspaces_config().items():
+        if not isinstance(cfg, dict):
+            continue
+        project_type = str(cfg.get("project_type") or "")
+        if project_type not in {"lvgl", "lvgl_simulator"}:
+            continue
+        items.append(
+            {
+                "workspace_id": workspace_id,
+                "display_name": cfg.get("display_name", workspace_id),
+                "project_type": project_type,
+                "project_name": cfg.get("project_name", workspace_id),
+                "path": cfg.get("path"),
+                "width": cfg.get("width", LVGL_DEFAULT_WIDTH),
+                "height": cfg.get("height", LVGL_DEFAULT_HEIGHT),
+                "lvgl_version": cfg.get("lvgl_version", LVGL_DEFAULT_VERSION),
+            }
+        )
+
+    return items
+
+
 def workspace_idf_images(cfg: Dict[str, Any]) -> List[str]:
     configured = cfg.get("idf_images")
     extra = configured if isinstance(configured, list) else []
@@ -772,6 +903,135 @@ def workspace_build_worker(
             log.write("==================================\n")
 
 
+def package_lvgl_preview_and_update_job(job_id: str, project_name: str, preview_dir: Path) -> None:
+    log_path = log_file(job_id)
+    index_path = preview_dir / "index.html"
+
+    if not index_path.exists():
+        raise RuntimeError("LVGL preview index.html not found")
+
+    update_job(job_id, status="packaging", message="Packaging LVGL preview")
+    artifact_path = package_lvgl_preview(job_id, project_name, preview_dir)
+
+    with log_path.open("a", encoding="utf-8") as log:
+        log.write("\n========== LVGL PREVIEW ==========\n")
+        log.write(f"Preview dir : {preview_dir}\n")
+        log.write(f"Preview URL : {lvgl_preview_url(job_id)}\n")
+        log.write(f"Artifact    : {artifact_path}\n")
+        log.write("==================================\n")
+
+    update_job(
+        job_id,
+        status="success",
+        message="LVGL preview build success",
+        preview_dir=str(preview_dir),
+        preview_url=lvgl_preview_url(job_id),
+        artifact=str(artifact_path),
+        artifact_name=artifact_path.name,
+        artifact_url=f"/api/artifacts/{artifact_path.name}",
+        download_url=f"/api/artifacts/{artifact_path.name}",
+        log_url=f"/api/lvgl/logs/{job_id}",
+        finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+    )
+
+
+def lvgl_build_worker(
+    job_id: str,
+    source_mode: str,
+    project_name: str,
+    width: int,
+    height: int,
+    upload_path: Optional[Path] = None,
+    workspace: Optional[Path] = None,
+    workspace_id: Optional[str] = None,
+    workspace_path: Optional[str] = None,
+) -> None:
+    log_path = log_file(job_id)
+    preview_dir = LVGL_PREVIEW_DIR / job_id
+
+    try:
+        acquired = BUILD_LOCK.acquire(blocking=False)
+        if not acquired:
+            update_job(
+                job_id,
+                status="failed",
+                message="Another build is running. Please retry later.",
+                finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+            )
+            return
+
+        try:
+            if source_mode == "upload_zip":
+                if upload_path is None or workspace is None:
+                    raise RuntimeError("Missing LVGL upload workspace")
+
+                update_job(job_id, status="extracting", message="Extracting uploaded LVGL zip")
+                safe_extract(upload_path, workspace)
+                project_dir = find_lvgl_project_root(workspace)
+            else:
+                if not workspace_path:
+                    raise RuntimeError("Missing LVGL remote workspace path")
+
+                update_job(job_id, status="checking", message="Checking LVGL remote workspace")
+                project_dir = resolve_lvgl_workspace_project_dir(workspace_path)
+
+            with log_path.open("a", encoding="utf-8") as log:
+                log.write(f"Job ID       : {job_id}\n")
+                log.write("Tool type    : lvgl_simulator\n")
+                log.write(f"Source mode  : {source_mode}\n")
+                if workspace_id:
+                    log.write(f"Workspace ID : {workspace_id}\n")
+                if upload_path:
+                    log.write(f"Upload path  : {upload_path}\n")
+                if workspace_path:
+                    log.write(f"Workspace    : {workspace_path}\n")
+                log.write(f"Project dir  : {project_dir}\n")
+                log.write(f"Project name : {project_name}\n")
+                log.write(f"LVGL version : {LVGL_DEFAULT_VERSION}\n")
+                log.write(f"Canvas       : {width}x{height}\n")
+                log.write(f"EMSDK image  : {LVGL_EMSDK_IMAGE}\n")
+
+            update_job(
+                job_id,
+                status="building",
+                message="Docker Emscripten build is running",
+                project_dir=str(project_dir),
+                preview_dir=str(preview_dir),
+            )
+
+            run_command(
+                [
+                    "bash",
+                    str(LVGL_BUILD_SCRIPT),
+                    str(project_dir),
+                    str(preview_dir),
+                    LVGL_EMSDK_IMAGE,
+                    str(width),
+                    str(height),
+                ],
+                log_path,
+            )
+
+            package_lvgl_preview_and_update_job(job_id, project_name, preview_dir)
+
+        finally:
+            BUILD_LOCK.release()
+
+    except Exception as exc:
+        update_job(
+            job_id,
+            status="failed",
+            message=str(exc),
+            log_url=f"/api/lvgl/logs/{job_id}",
+            finished_at=time.strftime("%Y-%m-%d %H:%M:%S"),
+        )
+
+        with log_path.open("a", encoding="utf-8") as log:
+            log.write("\n========== LVGL BUILD FAILED ==========\n")
+            log.write(str(exc) + "\n")
+            log.write("=======================================\n")
+
+
 def server_info() -> Dict[str, str]:
     return {
         "name": "ESP Remote Build Server",
@@ -779,6 +1039,7 @@ def server_info() -> Dict[str, str]:
         "home": "/home",
         "tools": "/tools/esp",
         "esp_tools": "/tools/esp",
+        "lvgl_tools": "/tools/lvgl",
         "default_project": DEFAULT_PROJECT_NAME,
         "default_target": DEFAULT_TARGET,
         "default_idf_image": DEFAULT_IDF_IMAGE,
@@ -902,6 +1163,11 @@ def esp_tools_settings() -> FileResponse:
     return ui_file("pages/settings.html")
 
 
+@app.get("/tools/lvgl")
+def lvgl_tools_home() -> FileResponse:
+    return ui_file("pages/lvgl.html")
+
+
 @app.get("/ui")
 def legacy_ui_home() -> RedirectResponse:
     return RedirectResponse(url="/tools/esp")
@@ -954,6 +1220,241 @@ def list_workspaces():
         )
 
     return {"workspaces": items}
+
+
+@app.get("/api/lvgl/workspaces")
+def list_lvgl_workspaces():
+    return {
+        "default_width": LVGL_DEFAULT_WIDTH,
+        "default_height": LVGL_DEFAULT_HEIGHT,
+        "default_lvgl_version": LVGL_DEFAULT_VERSION,
+        "emsdk_image": LVGL_EMSDK_IMAGE,
+        "workspaces": list_lvgl_workspace_items(),
+    }
+
+
+@app.post("/api/lvgl/build/workspace")
+async def build_lvgl_from_workspace(payload: Dict[str, Any]):
+    workspace_id = payload.get("workspace_id")
+    cfg = get_lvgl_workspace_config(workspace_id)
+
+    workspace_path = str(cfg["path"])
+    project_name = str(payload.get("project_name") or cfg.get("project_name") or workspace_id or "lvgl_project")
+    width = normalize_lvgl_dimension(payload.get("width", cfg.get("width")), LVGL_DEFAULT_WIDTH, "width")
+    height = normalize_lvgl_dimension(payload.get("height", cfg.get("height")), LVGL_DEFAULT_HEIGHT, "height")
+    job_id = make_job_id()
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    save_job(
+        job_id,
+        {
+            "status": "queued",
+            "tool_type": "lvgl_simulator",
+            "source_mode": "remote_workspace",
+            "message": "LVGL remote workspace build queued",
+            "workspace_id": workspace_id,
+            "workspace_path": workspace_path,
+            "project_name": project_name,
+            "width": width,
+            "height": height,
+            "lvgl_version": cfg.get("lvgl_version", LVGL_DEFAULT_VERSION),
+            "emsdk_image": LVGL_EMSDK_IMAGE,
+            "log": str(log_file(job_id)),
+            "created_at": now,
+            "finished_at": None,
+            "artifact": None,
+            "artifact_name": None,
+            "artifact_url": None,
+            "download_url": None,
+            "preview_dir": str(LVGL_PREVIEW_DIR / job_id),
+            "preview_url": None,
+            "log_url": f"/api/lvgl/logs/{job_id}",
+        },
+    )
+    cleanup_old_build_records()
+
+    worker = threading.Thread(
+        target=lvgl_build_worker,
+        kwargs={
+            "job_id": job_id,
+            "source_mode": "remote_workspace",
+            "project_name": project_name,
+            "width": width,
+            "height": height,
+            "workspace_id": str(workspace_id),
+            "workspace_path": workspace_path,
+        },
+        daemon=True,
+    )
+    worker.start()
+
+    return {
+        "job_id": job_id,
+        "status": "running",
+        "status_url": f"/api/lvgl/jobs/{job_id}",
+        "log_url": f"/api/lvgl/logs/{job_id}",
+    }
+
+
+@app.post("/api/lvgl/build/upload")
+async def build_lvgl_from_upload(
+    file: UploadFile = File(...),
+    project_name: str = Form("lvgl_project"),
+    width: int = Form(LVGL_DEFAULT_WIDTH),
+    height: int = Form(LVGL_DEFAULT_HEIGHT),
+):
+    width = normalize_lvgl_dimension(width, LVGL_DEFAULT_WIDTH, "width")
+    height = normalize_lvgl_dimension(height, LVGL_DEFAULT_HEIGHT, "height")
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+
+    if not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only .zip file is supported")
+
+    job_id = make_job_id()
+    upload_path = UPLOAD_DIR / f"{job_id}_lvgl.zip"
+    workspace = WORKSPACE_DIR / f"{job_id}_lvgl"
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    size = 0
+
+    with upload_path.open("wb") as out:
+        while True:
+            chunk = await file.read(1024 * 1024)
+
+            if not chunk:
+                break
+
+            size += len(chunk)
+
+            if size > LVGL_MAX_UPLOAD_SIZE:
+                out.close()
+                upload_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="Uploaded file too large")
+
+            out.write(chunk)
+
+    project_name = project_name.strip() or "lvgl_project"
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    save_job(
+        job_id,
+        {
+            "status": "uploaded",
+            "tool_type": "lvgl_simulator",
+            "source_mode": "upload_zip",
+            "message": "LVGL upload completed",
+            "project_name": project_name,
+            "width": width,
+            "height": height,
+            "lvgl_version": LVGL_DEFAULT_VERSION,
+            "emsdk_image": LVGL_EMSDK_IMAGE,
+            "upload_file": str(upload_path),
+            "workspace": str(workspace),
+            "log": str(log_file(job_id)),
+            "created_at": now,
+            "finished_at": None,
+            "artifact": None,
+            "artifact_name": None,
+            "artifact_url": None,
+            "download_url": None,
+            "preview_dir": str(LVGL_PREVIEW_DIR / job_id),
+            "preview_url": None,
+            "log_url": f"/api/lvgl/logs/{job_id}",
+        },
+    )
+    cleanup_old_build_records()
+
+    worker = threading.Thread(
+        target=lvgl_build_worker,
+        kwargs={
+            "job_id": job_id,
+            "source_mode": "upload_zip",
+            "project_name": project_name,
+            "width": width,
+            "height": height,
+            "upload_path": upload_path,
+            "workspace": workspace,
+        },
+        daemon=True,
+    )
+    worker.start()
+
+    return {
+        "job_id": job_id,
+        "status": "running",
+        "status_url": f"/api/lvgl/jobs/{job_id}",
+        "log_url": f"/api/lvgl/logs/{job_id}",
+    }
+
+
+@app.get("/api/lvgl/jobs/{job_id}")
+def get_lvgl_job(job_id: str):
+    job = load_job(job_id)
+    if job.get("tool_type") != "lvgl_simulator":
+        raise HTTPException(status_code=404, detail="LVGL job not found")
+    return job
+
+
+@app.get("/api/lvgl/jobs")
+def list_lvgl_jobs():
+    jobs = []
+
+    for path in sorted(JOB_DIR.glob("*.json"), reverse=True):
+        try:
+            job = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if job.get("tool_type") == "lvgl_simulator":
+            jobs.append(job)
+
+    return jobs[:MAX_BUILD_RECORDS]
+
+
+@app.get("/api/lvgl/logs/{job_id}", response_class=PlainTextResponse)
+def get_lvgl_log(job_id: str):
+    job = load_job(job_id)
+    if job.get("tool_type") != "lvgl_simulator":
+        raise HTTPException(status_code=404, detail="LVGL job not found")
+
+    path = log_file(job_id)
+
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Log not found")
+
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+@app.get("/api/lvgl/previews/{job_id}")
+def get_lvgl_preview_index(job_id: str) -> RedirectResponse:
+    return RedirectResponse(url=f"/api/lvgl/previews/{safe_name(job_id, 'job_id')}/index.html")
+
+
+@app.get("/api/lvgl/previews/{job_id}/{asset_path:path}")
+def get_lvgl_preview_asset(job_id: str, asset_path: str):
+    job_id = safe_name(job_id, "job_id")
+    job = load_job(job_id)
+    if job.get("tool_type") != "lvgl_simulator":
+        raise HTTPException(status_code=404, detail="LVGL job not found")
+
+    preview_dir = (LVGL_PREVIEW_DIR / job_id).resolve()
+    target = (preview_dir / (asset_path or "index.html")).resolve()
+
+    if target.is_dir():
+        target = (target / "index.html").resolve()
+
+    if preview_dir != target and preview_dir not in target.parents:
+        raise HTTPException(status_code=400, detail="Invalid preview path")
+
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Preview asset not found")
+
+    return FileResponse(
+        target,
+        media_type=lvgl_preview_media_type(target),
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 @app.post("/api/build/workspace")

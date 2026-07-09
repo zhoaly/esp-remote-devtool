@@ -1,5 +1,5 @@
 {
-  "title": "ZLYHUB开发工具集",
+  "title": "ZLYHUB Developer Toolkit",
   "subtitle": "统一管理远端开发工具、设备发布流程和后续个人服务。",
   "sections": [
     {
@@ -37,16 +37,18 @@
     },
     {
       "id": "lvgl-remote-simulator",
-      "section_id": "planned",
+      "section_id": "active",
       "title": "LVGL远端模拟器",
-      "description": "预留 LVGL UI 远端模拟、预览和调试入口。",
-      "href": "",
-      "status": "planned",
-      "status_label": "计划中",
-      "order": 10,
+      "description": "将本地或远端 LVGL 9.x 项目编译为 WebAssembly，在网页中预览 UI 并查看构建日志。",
+      "href": "/tools/lvgl",
+      "status": "available",
+      "status_label": "已上线",
+      "order": 20,
       "enabled": true,
-      "features": ["远端模拟", "UI预览", "调试入口"],
-      "actions": []
+      "features": ["WASM预览", "远端编译", "日志调试"],
+      "actions": [
+        {"label": "进入模拟器", "href": "/tools/lvgl", "primary": true}
+      ]
     },
     {
       "id": "personal-storage",

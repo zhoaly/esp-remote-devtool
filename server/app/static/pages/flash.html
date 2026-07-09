@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>本地烧录 - ESP Remote Build</title>
-    <link rel="stylesheet" href="/static/css/common.css?v=responsive-card-status-fix-20260709">
+    <title>Local Flash - ESP Toolset</title>
+    <link rel="stylesheet" href="/static/css/common.css?v=nav-registry-20260709">
 </head>
 <body>
     <div class="shell">
         <nav class="top-nav">
+            <a href="/home">HOME</a>
             <a href="/tools/esp">ESP工具集</a>
             <a href="/tools/esp/build">远端编译</a>
             <a href="/tools/esp/flash" class="active">本地烧录</a>
@@ -19,7 +20,7 @@
 
         <section class="hero">
             <div class="eyebrow">Local Flash</div>
-            <h1>本地串口烧录</h1>
+            <h1>Local serial flash.</h1>
             <div class="hero-copy">
                 选择已有构建产物后，通过本机 Local Agent：<code id="localAgentCard"></code> 下载 artifact 并调用 <code>esptool</code> 烧录。
             </div>
@@ -66,7 +67,7 @@
         </section>
     </div>
 
-    <script src="/static/js/common.js?v=select-layer-20260704"></script>
+    <script src="/static/js/common.js?v=nav-registry-20260709"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/flash.js"></script>
 </body>
