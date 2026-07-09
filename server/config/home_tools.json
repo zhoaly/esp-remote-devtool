@@ -23,16 +23,16 @@
       "section_id": "active",
       "title": "ESP远端编译工具集",
       "description": "集中管理 ESP-IDF 远端编译、本地烧录、OTA 发布、构建历史和只读配置。",
-      "href": "/ui",
+      "href": "/tools/esp",
       "status": "available",
       "status_label": "已上线",
       "order": 10,
       "enabled": true,
       "features": ["远端编译", "本地烧录", "OTA发布", "构建历史"],
       "actions": [
-        {"label": "进入工具集", "href": "/ui", "primary": true},
-        {"label": "远端编译", "href": "/ui/build"},
-        {"label": "OTA发布", "href": "/ui/ota"}
+        {"label": "进入工具集", "href": "/tools/esp", "primary": true},
+        {"label": "远端编译", "href": "/tools/esp/build"},
+        {"label": "OTA发布", "href": "/tools/esp/ota"}
       ]
     },
     {

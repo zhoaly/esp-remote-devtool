@@ -776,8 +776,9 @@ def server_info() -> Dict[str, str]:
     return {
         "name": "ESP Remote Build Server",
         "docs": "/docs",
-        "ui": "/ui",
         "home": "/home",
+        "tools": "/tools/esp",
+        "esp_tools": "/tools/esp",
         "default_project": DEFAULT_PROJECT_NAME,
         "default_target": DEFAULT_TARGET,
         "default_idf_image": DEFAULT_IDF_IMAGE,
@@ -866,39 +867,69 @@ def ui_file(relative_path: str) -> FileResponse:
     return FileResponse(page_file, headers={"Cache-Control": "no-store, max-age=0"})
 
 
-@app.get("/ui")
-def ui_home() -> FileResponse:
-    return ui_file("index.html")
-
-
 @app.get("/home")
 def zlyhub_home() -> FileResponse:
     return ui_file("home.html")
 
 
-@app.get("/ui/build")
-def ui_build() -> FileResponse:
+@app.get("/tools/esp")
+def esp_tools_home() -> FileResponse:
+    return ui_file("index.html")
+
+
+@app.get("/tools/esp/build")
+def esp_tools_build() -> FileResponse:
     return ui_file("pages/build.html")
 
 
-@app.get("/ui/flash")
-def ui_flash() -> FileResponse:
+@app.get("/tools/esp/flash")
+def esp_tools_flash() -> FileResponse:
     return ui_file("pages/flash.html")
 
 
-@app.get("/ui/ota")
-def ui_ota() -> FileResponse:
+@app.get("/tools/esp/ota")
+def esp_tools_ota() -> FileResponse:
     return ui_file("pages/ota.html")
 
 
-@app.get("/ui/jobs")
-def ui_jobs() -> FileResponse:
+@app.get("/tools/esp/jobs")
+def esp_tools_jobs() -> FileResponse:
     return ui_file("pages/jobs.html")
 
 
-@app.get("/ui/settings")
-def ui_settings() -> FileResponse:
+@app.get("/tools/esp/settings")
+def esp_tools_settings() -> FileResponse:
     return ui_file("pages/settings.html")
+
+
+@app.get("/ui")
+def legacy_ui_home() -> RedirectResponse:
+    return RedirectResponse(url="/tools/esp")
+
+
+@app.get("/ui/build")
+def legacy_ui_build() -> RedirectResponse:
+    return RedirectResponse(url="/tools/esp/build")
+
+
+@app.get("/ui/flash")
+def legacy_ui_flash() -> RedirectResponse:
+    return RedirectResponse(url="/tools/esp/flash")
+
+
+@app.get("/ui/ota")
+def legacy_ui_ota() -> RedirectResponse:
+    return RedirectResponse(url="/tools/esp/ota")
+
+
+@app.get("/ui/jobs")
+def legacy_ui_jobs() -> RedirectResponse:
+    return RedirectResponse(url="/tools/esp/jobs")
+
+
+@app.get("/ui/settings")
+def legacy_ui_settings() -> RedirectResponse:
+    return RedirectResponse(url="/tools/esp/settings")
 
 
 @app.get("/api/workspaces")

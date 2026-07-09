@@ -62,7 +62,7 @@ function stopPolling() {
 }
 
 function initCommonChrome() {
-    setText("remoteBaseText", REMOTE_BASE + "/ui");
+    setText("remoteBaseText", REMOTE_BASE + "/tools/esp");
     setText("remoteHostCard", REMOTE_BASE);
     setText("localAgentCard", LOCAL_AGENT);
     enhanceSelects();
