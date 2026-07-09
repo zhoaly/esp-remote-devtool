@@ -66,6 +66,8 @@ LVGL_EMSDK_IMAGE = os.getenv("LVGL_EMSDK_IMAGE", "emscripten/emsdk:latest")
 LVGL_GIT_REPO = os.getenv("LVGL_GIT_REPO", "https://github.com/lvgl/lvgl.git")
 LVGL_GIT_REF = os.getenv("LVGL_GIT_REF", "v9.3.0")
 LVGL_SOURCE_DIR = os.getenv("LVGL_SOURCE_DIR", "").strip()
+LVGL_SDL2_PORT_DIR = os.getenv("LVGL_SDL2_PORT_DIR", "").strip()
+LVGL_EMSDK_CACHE_DIR = os.getenv("LVGL_EMSDK_CACHE_DIR", "").strip()
 LVGL_MAX_UPLOAD_SIZE = int(os.getenv("LVGL_MAX_UPLOAD_SIZE_MB", os.getenv("ESP_MAX_UPLOAD_SIZE_MB", "200"))) * 1024 * 1024
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 VERSION_SHORT_RE = re.compile(r"^\d+\.\d+$")
@@ -294,6 +296,38 @@ def normalize_optional_header(value: Any) -> str:
     return item
 
 
+def lvgl_demo_sources_for_entry(entry_call: str) -> List[str]:
+    match = re.fullmatch(r"(lv_demo_[A-Za-z0-9_]+)\(\)", entry_call)
+    if not match:
+        return []
+
+    return {
+        "lv_demo_widgets": [
+            "demos/lv_demos.c",
+            "demos/widgets/assets/img_clothes.c",
+            "demos/widgets/assets/img_demo_widgets_avatar.c",
+            "demos/widgets/assets/img_demo_widgets_needle.c",
+            "demos/widgets/assets/img_lvgl_logo.c",
+            "demos/widgets/lv_demo_widgets.c",
+            "demos/widgets/lv_demo_widgets_analytics.c",
+            "demos/widgets/lv_demo_widgets_components.c",
+            "demos/widgets/lv_demo_widgets_profile.c",
+            "demos/widgets/lv_demo_widgets_shop.c",
+        ],
+    }.get(match.group(1), [])
+
+
+def cmake_append_lvgl_sources(source_paths: List[str]) -> str:
+    blocks = []
+    for source_path in source_paths:
+        blocks.append(
+            f"""if(LVGL_UPSTREAM_SOURCE_DIR AND EXISTS "${{LVGL_UPSTREAM_SOURCE_DIR}}/{source_path}")
+    list(APPEND UI_SOURCES "${{LVGL_UPSTREAM_SOURCE_DIR}}/{source_path}")
+endif()"""
+        )
+    return "\n".join(blocks)
+
+
 def normalize_manifest_dirs(values: Any) -> List[str]:
     if not isinstance(values, list):
         return []
@@ -331,11 +365,12 @@ def write_lvgl_ui_main(main_path: Path, entry_call: str, entry_header: str) -> N
     header_block = ""
     if entry_header:
         header_block = f'#if __has_include("{entry_header}")\n#include "{entry_header}"\n#endif\n'
+    elif entry_call.startswith("lv_demo_"):
+        entry_name = entry_call[:-2]
+        header_block = f"void {entry_name}(void);\n"
 
     main_path.write_text(
         f"""#include "lvgl/lvgl.h"
-#include "lvgl/demos/lv_demos.h"
-#include "lvgl/examples/lv_examples.h"
 #include <emscripten.h>
 {header_block}
 static void lvgl_tick(void * user_data)
@@ -382,11 +417,11 @@ def write_lvgl_ui_conf(conf_path: Path) -> None:
 #define LV_USE_SDL 1
 #define LV_USE_DRAW_SDL 0
 #define LV_USE_DEMO_WIDGETS 1
-#define LV_USE_DEMO_BENCHMARK 1
-#define LV_USE_DEMO_STRESS 1
-#define LV_USE_DEMO_RENDER 1
-#define LV_USE_PERF_MONITOR 1
-#define LV_USE_MEM_MONITOR 1
+#define LV_USE_DEMO_BENCHMARK 0
+#define LV_USE_DEMO_STRESS 0
+#define LV_USE_DEMO_RENDER 0
+#define LV_USE_PERF_MONITOR 0
+#define LV_USE_MEM_MONITOR 0
 
 #endif
 """,
@@ -429,6 +464,16 @@ def prepare_lvgl_ui_scaffold(workspace: Path, manifest: Dict[str, Any], width: i
     source_lines = "\n".join(f"    {cmake_quote(item)}" for item in source_files)
     include_lines = "\n".join(f"    {item}" for item in include_paths)
     lvgl_source_dir = "/lvgl_source" if LVGL_SOURCE_DIR else ""
+    demo_sources = lvgl_demo_sources_for_entry(entry_call)
+    demo_source_block = ""
+    demo_include_block = ""
+    if demo_sources:
+        demo_source_block = "\n" + cmake_append_lvgl_sources(demo_sources) + "\n"
+        demo_include_block = """
+if(LVGL_UPSTREAM_SOURCE_DIR AND EXISTS "${LVGL_UPSTREAM_SOURCE_DIR}/demos")
+    target_include_directories(index PRIVATE "${LVGL_UPSTREAM_SOURCE_DIR}/demos")
+endif()
+"""
 
     (web_project / "CMakeLists.txt").write_text(
         f"""cmake_minimum_required(VERSION 3.20)
@@ -437,11 +482,17 @@ project(lvgl_ui_web C CXX)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXECUTABLE_SUFFIX ".html")
-set(LV_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
-set(LV_BUILD_DEMOS ON CACHE BOOL "" FORCE)
+add_compile_options(-sUSE_SDL=2)
+add_link_options(-sUSE_SDL=2)
+set(LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
 set(LVGL_LOCAL_SOURCE_DIR {cmake_quote(lvgl_source_dir)} CACHE PATH "Local LVGL source directory mounted in the Emscripten container")
+set(LVGL_UPSTREAM_SOURCE_DIR "")
 
 if(LVGL_LOCAL_SOURCE_DIR AND EXISTS "${{LVGL_LOCAL_SOURCE_DIR}}/CMakeLists.txt")
+    set(LVGL_UPSTREAM_SOURCE_DIR "${{LVGL_LOCAL_SOURCE_DIR}}")
     add_subdirectory("${{LVGL_LOCAL_SOURCE_DIR}}" lvgl)
 else()
     include(FetchContent)
@@ -452,11 +503,13 @@ else()
         GIT_SHALLOW TRUE
     )
     FetchContent_MakeAvailable(lvgl)
+    set(LVGL_UPSTREAM_SOURCE_DIR "${{lvgl_SOURCE_DIR}}")
 endif()
 
 set(UI_SOURCES
 {source_lines}
 )
+{demo_source_block}
 
 add_executable(index src/main.c ${{UI_SOURCES}})
 target_compile_definitions(index PRIVATE
@@ -468,14 +521,8 @@ target_include_directories(index PRIVATE
 {include_lines}
     "${{CMAKE_CURRENT_SOURCE_DIR}}"
 )
-set(LVGL_OPTIONAL_LIBS "")
-if(TARGET lvgl::examples)
-    list(APPEND LVGL_OPTIONAL_LIBS lvgl::examples)
-endif()
-if(TARGET lvgl::demos)
-    list(APPEND LVGL_OPTIONAL_LIBS lvgl::demos)
-endif()
-target_link_libraries(index PRIVATE lvgl ${{LVGL_OPTIONAL_LIBS}})
+{demo_include_block}
+target_link_libraries(index PRIVATE lvgl)
 target_link_options(index PRIVATE
     -sUSE_SDL=2
     -sALLOW_MEMORY_GROWTH=1
@@ -1233,6 +1280,8 @@ def lvgl_build_worker(
                 log.write(f"Canvas       : {width}x{height}\n")
                 log.write(f"EMSDK image  : {LVGL_EMSDK_IMAGE}\n")
                 log.write(f"LVGL source  : {LVGL_SOURCE_DIR or 'FetchContent'}\n")
+                log.write(f"SDL2 port    : {LVGL_SDL2_PORT_DIR or 'Emscripten default'}\n")
+                log.write(f"EMSDK cache  : {LVGL_EMSDK_CACHE_DIR or 'container default'}\n")
 
             update_job(
                 job_id,
@@ -1252,6 +1301,8 @@ def lvgl_build_worker(
                     str(width),
                     str(height),
                     LVGL_SOURCE_DIR,
+                    LVGL_SDL2_PORT_DIR,
+                    LVGL_EMSDK_CACHE_DIR,
                 ],
                 log_path,
             )

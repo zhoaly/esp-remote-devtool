@@ -7,6 +7,8 @@ EMSDK_IMAGE="${3:-emscripten/emsdk:latest}"
 WIDTH="${4:-480}"
 HEIGHT="${5:-480}"
 LVGL_SOURCE_DIR="${6:-}"
+SDL2_PORT_DIR="${7:-}"
+EMSDK_CACHE_DIR="${8:-}"
 
 if [ ! -d "$PROJECT_DIR" ]; then
     echo "ERROR: project dir not found: $PROJECT_DIR"
@@ -27,6 +29,8 @@ echo "Output dir  : $OUTPUT_DIR"
 echo "EMSDK image : $EMSDK_IMAGE"
 echo "Canvas      : ${WIDTH}x${HEIGHT}"
 echo "LVGL source : ${LVGL_SOURCE_DIR:-FetchContent}"
+echo "SDL2 port   : ${SDL2_PORT_DIR:-Emscripten default}"
+echo "EMSDK cache : ${EMSDK_CACHE_DIR:-container default}"
 echo "============================================"
 
 DOCKER_ARGS=(
@@ -47,6 +51,25 @@ if [ -n "$LVGL_SOURCE_DIR" ]; then
         exit 1
     fi
     DOCKER_ARGS+=(-v "$LVGL_SOURCE_DIR:/lvgl_source:ro")
+fi
+
+if [ -n "$SDL2_PORT_DIR" ]; then
+    if [ ! -f "$SDL2_PORT_DIR/include/SDL.h" ]; then
+        echo "ERROR: SDL2 port dir is invalid: $SDL2_PORT_DIR"
+        exit 1
+    fi
+    DOCKER_ARGS+=(
+        -v "$SDL2_PORT_DIR:/emscripten_ports/sdl2:ro"
+        -e EMCC_LOCAL_PORTS=sdl2=/emscripten_ports/sdl2
+    )
+fi
+
+if [ -n "$EMSDK_CACHE_DIR" ]; then
+    mkdir -p "$EMSDK_CACHE_DIR"
+    DOCKER_ARGS+=(
+        -v "$EMSDK_CACHE_DIR:/emscripten_cache"
+        -e EM_CACHE=/emscripten_cache
+    )
 fi
 
 docker run "${DOCKER_ARGS[@]}" \
