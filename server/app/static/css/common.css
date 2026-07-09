@@ -927,30 +927,94 @@ th { color: #fed7aa; font-size: 13px; }
 .lvgl-workbench .log-box {
     flex: 1;
     min-height: 520px;
-    max-height: none;
+    max-height: 520px;
+    overflow-y: auto;
 }
+
+/* ── Preview panel ── */
 .preview-frame-wrap {
     position: relative;
     width: 100%;
     min-height: 520px;
-    border-radius: 18px;
+    border-radius: 24px;
     overflow: hidden;
-    border: 1px solid rgba(51, 65, 85, 0.9);
-    background: #020617;
+    background:
+        radial-gradient(ellipse at 50% 0%, rgba(249, 115, 22, 0.06), transparent 60%),
+        #0a0e17;
+    box-shadow:
+        inset 0 0 0 1px rgba(148, 163, 184, 0.12),
+        0 0 0 4px rgba(15, 23, 42, 0.9),
+        0 0 0 5px rgba(148, 163, 184, 0.10);
+    transition: box-shadow 0.25s ease;
 }
+
+/* Device-bezel header (mock status bar) */
+.preview-frame-wrap::before {
+    content: "";
+    display: block;
+    height: 20px;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.80));
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+/* Loading shimmer overlay */
+.preview-frame-wrap::after {
+    content: "";
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        repeating-linear-gradient(
+            90deg,
+            transparent 0%,
+            rgba(249, 115, 22, 0.015) 50%,
+            transparent 100%
+        );
+    background-size: 200% 100%;
+    animation: lvgl-shimmer 3s ease-in-out infinite;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.preview-frame-wrap.loading::after {
+    opacity: 1;
+}
+
+@keyframes lvgl-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
 .preview-frame-wrap iframe {
+    position: absolute;
+    top: 20px;
+    left: 0;
     width: 100%;
-    height: 100%;
-    min-height: 520px;
+    height: calc(100% - 20px);
     display: block;
     border: 0;
-    background: #020617;
+    background: #0a0e17;
     opacity: 0;
-    transition: opacity 0.18s ease;
+    transition: opacity 0.35s ease;
 }
+
+.preview-frame-wrap iframe[src]:not([src=""]) {
+    opacity: 1;
+}
+
+.preview-frame-wrap iframe[src]:not([src=""]) ~ .preview-empty {
+    display: none;
+}
+
 .preview-empty {
     position: absolute;
-    inset: 0;
+    top: 20px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: grid;
     place-items: center;
     padding: 18px;
@@ -958,6 +1022,54 @@ th { color: #fed7aa; font-size: 13px; }
     text-align: center;
     line-height: 1.6;
 }
+
+/* Elegant empty-state icon */
+.preview-empty::before {
+    content: "⊞";
+    display: block;
+    font-size: 48px;
+    line-height: 1;
+    margin-bottom: 10px;
+    opacity: 0.25;
+    color: var(--accent);
+}
+
+/* Panel heading refinements for preview */
+.lvgl-workbench > .panel:first-child .panel-heading {
+    position: relative;
+    padding-bottom: 2px;
+}
+
+.lvgl-workbench > .panel:first-child .panel-heading::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(249, 115, 22, 0.20), transparent 60%);
+}
+
+#lvglPreviewSize {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+}
+
+#lvglPreviewStatus {
+    border-color: rgba(34, 197, 94, 0.42);
+    background: rgba(20, 83, 45, 0.22);
+    color: #bbf7d0;
+    font-size: 11px;
+    padding: 3px 10px;
+    gap: 4px;
+    animation: lvgl-fade-in 0.3s ease;
+}
+
+@keyframes lvgl-fade-in {
+    from { opacity: 0; transform: scale(0.92); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
 @media (max-width: 860px) {
     .panel-heading,
     .list-row {
@@ -979,5 +1091,15 @@ th { color: #fed7aa; font-size: 13px; }
     .preview-frame-wrap iframe,
     .lvgl-workbench .log-box {
         min-height: 380px;
+    }
+    .preview-frame-wrap::before {
+        height: 14px;
+    }
+    .preview-frame-wrap iframe {
+        top: 14px;
+        height: calc(100% - 14px);
+    }
+    .preview-empty {
+        top: 14px;
     }
 }

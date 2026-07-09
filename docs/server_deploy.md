@@ -15,4 +15,15 @@ To control the ESP-IDF versions shown on the build page, set
 `ESP_ALLOWED_IDF_IMAGES` to a comma-separated list of Docker images. Keep
 `ESP_ALLOW_CUSTOM_IDF_IMAGE=1` if users may type a custom image name.
 
+For OTA releases, set `ESP_OTA_PUBLIC_BASE_URL` to a stable externally
+reachable origin, preferably a DDNS hostname instead of a raw IPv6 address:
+
+```bash
+ESP_OTA_PUBLIC_BASE_URL=http://zlyhub.serveblog.net:8000
+```
+
+The UI copies `ota check <latest-manifest-url>`. The latest manifest URL should
+point to `/api/ota/latest?...`, and the manifest JSON returned by that endpoint
+contains a `url` field pointing to `/api/ota/firmware/<release>/app.bin`.
+
 Runtime data is stored under `server/data/` and is intentionally excluded from Git.

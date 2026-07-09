@@ -144,18 +144,29 @@ function setLvglLinks(job) {
 function setLvglPreview(previewUrl) {
     currentLvglPreviewUrl = previewUrl ? REMOTE_BASE + previewUrl : null;
     const frame = document.getElementById("lvglPreviewFrame");
+    const wrap = document.getElementById("lvglPreviewWrap");
     const empty = document.getElementById("lvglPreviewEmpty");
+    const statusBadge = document.getElementById("lvglPreviewStatus");
 
     if (!currentLvglPreviewUrl) {
         frame.removeAttribute("src");
-        frame.style.opacity = "0";
         empty.style.display = "grid";
+        wrap.classList.remove("loading");
+        if (statusBadge) statusBadge.style.display = "none";
         return;
     }
 
-    frame.src = `${currentLvglPreviewUrl}?t=${Date.now()}`;
-    frame.style.opacity = "1";
+    wrap.classList.add("loading");
     empty.style.display = "none";
+    if (statusBadge) statusBadge.style.display = "none";
+    frame.src = `${currentLvglPreviewUrl}?t=${Date.now()}`;
+
+    /* Remove shimmer once iframe loads, show live badge */
+    frame.onload = function onPreviewLoad() {
+        wrap.classList.remove("loading");
+        if (statusBadge) statusBadge.style.display = "inline-flex";
+        frame.onload = null;
+    };
 }
 
 function reloadLvglPreview() {
@@ -163,7 +174,17 @@ function reloadLvglPreview() {
         lvglSetStatus("还没有可刷新的预览，请先完成一次成功构建。", "failed");
         return;
     }
-    document.getElementById("lvglPreviewFrame").src = `${currentLvglPreviewUrl}?t=${Date.now()}`;
+    const frame = document.getElementById("lvglPreviewFrame");
+    const wrap = document.getElementById("lvglPreviewWrap");
+    const statusBadge = document.getElementById("lvglPreviewStatus");
+    wrap.classList.add("loading");
+    if (statusBadge) statusBadge.style.display = "none";
+    frame.src = `${currentLvglPreviewUrl}?t=${Date.now()}`;
+    frame.onload = function onPreviewLoad() {
+        wrap.classList.remove("loading");
+        if (statusBadge) statusBadge.style.display = "inline-flex";
+        frame.onload = null;
+    };
 }
 
 async function startLvglBuild() {

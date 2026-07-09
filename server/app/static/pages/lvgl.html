@@ -134,9 +134,12 @@
             <div class="panel">
                 <div class="panel-heading">
                     <h2>3. Preview</h2>
-                    <span class="tag" id="lvglPreviewSize">480 x 480</span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <span class="tag" id="lvglPreviewSize" title="预览画布尺寸">480 x 480</span>
+                        <span class="tag" id="lvglPreviewStatus" style="display:none" title="预览状态">● Live</span>
+                    </div>
                 </div>
-                <div class="preview-frame-wrap" id="lvglPreviewWrap">
+                <div class="preview-frame-wrap loading" id="lvglPreviewWrap">
                     <iframe id="lvglPreviewFrame" title="LVGL UI Preview"></iframe>
                     <div class="preview-empty" id="lvglPreviewEmpty">构建成功后这里会显示 LVGL WebAssembly 预览。</div>
                 </div>
