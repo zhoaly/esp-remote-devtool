@@ -89,3 +89,40 @@ def upload_lvgl_project_zip(
         "remote_url": lvgl_build_url,
         "remote_response": parse_remote_response(response),
     }
+
+
+def upload_lvgl_ui_package_zip(
+    remote_build_url: str,
+    zip_path: str,
+    project_name: str,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    parsed = urlparse(derive_lvgl_build_url(remote_build_url))
+    lvgl_ui_build_url = urlunparse((parsed.scheme, parsed.netloc, "/api/lvgl/build/ui-upload", "", "", ""))
+
+    with open(zip_path, "rb") as file_handle:
+        files = {"file": (zip_path, file_handle, "application/zip")}
+        data = {
+            "project_name": project_name,
+            "width": str(width),
+            "height": str(height),
+        }
+        response = requests.post(
+            lvgl_ui_build_url,
+            files=files,
+            data=data,
+            timeout=(10, 60),
+        )
+
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"Remote LVGL UI build server returned error: {response.status_code} {response.text}"
+        )
+
+    return {
+        "status": "uploaded",
+        "local_zip": zip_path,
+        "remote_url": lvgl_ui_build_url,
+        "remote_response": parse_remote_response(response),
+    }

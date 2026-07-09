@@ -25,11 +25,28 @@ function handleLvglSourceModeChange() {
     document.querySelectorAll(".lvgl-local-field").forEach((field) => {
         field.style.display = isRemoteWorkspace ? "none" : "grid";
     });
+    handleLvglLocalBuildModeChange();
 
     const workspace = selectedLvglWorkspace();
     if (isRemoteWorkspace && workspace) {
         applyLvglWorkspaceDefaults(workspace);
     }
+}
+
+function handleLvglLocalBuildModeChange() {
+    const sourceMode = document.getElementById("lvglSourceMode")?.value || "local_path";
+    const localMode = document.getElementById("lvglLocalBuildMode")?.value || "ui_package";
+    const showUiFields = sourceMode !== "remote_workspace" && localMode === "ui_package";
+    document.querySelectorAll(".lvgl-ui-field").forEach((field) => {
+        field.style.display = showUiFields ? "grid" : "none";
+    });
+}
+
+function splitCsv(value) {
+    return String(value || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
 }
 
 function applyLvglWorkspaceDefaults(workspace) {
@@ -79,9 +96,12 @@ async function loadLvglWorkspaces() {
     try {
         const data = await apiGet("/api/lvgl/workspaces");
         lvglWorkspaces = data.workspaces || [];
-        document.getElementById("lvglWidth").value = data.default_width || 480;
-        document.getElementById("lvglHeight").value = data.default_height || 480;
-        document.getElementById("lvglVersion").value = data.default_lvgl_version || "9.x";
+        const widthInput = document.getElementById("lvglWidth");
+        const heightInput = document.getElementById("lvglHeight");
+        const versionInput = document.getElementById("lvglVersion");
+        if (!widthInput.value) widthInput.value = data.default_width || 480;
+        if (!heightInput.value) heightInput.value = data.default_height || 480;
+        if (!versionInput.value) versionInput.value = data.default_lvgl_version || "9.x";
         renderLvglWorkspaces(lvglWorkspaces);
         updateLvglPreviewSize();
     } catch (err) {
@@ -178,13 +198,31 @@ async function startLvglBuild() {
         } else {
             const projectPath = document.getElementById("lvglProjectPath").value.trim();
             if (!projectPath) throw new Error("请输入 Windows 本地 LVGL 项目路径。");
-            lvglSetStatus("正在请求本地 Agent 压缩 LVGL 项目并上传到远端 Server...");
-            const agentResp = await localAgentPostJson("/api/lvgl/build_from_path", {
-                project_path: projectPath,
-                project_name: document.getElementById("lvglProjectName").value.trim() || "lvgl_project",
-                width,
-                height,
-            });
+            const localMode = document.getElementById("lvglLocalBuildMode").value;
+            const projectName = document.getElementById("lvglProjectName").value.trim() || "lvgl_project";
+            let agentResp;
+
+            if (localMode === "ui_package") {
+                lvglSetStatus("正在请求本地 Agent 抽取 LVGL UI 代码并上传到远端 Server...");
+                agentResp = await localAgentPostJson("/api/lvgl/build_ui_from_path", {
+                    project_path: projectPath,
+                    project_name: projectName,
+                    width,
+                    height,
+                    ui_roots: splitCsv(document.getElementById("lvglUiRoots").value),
+                    include_dirs: splitCsv(document.getElementById("lvglIncludeDirs").value),
+                    entry_header: document.getElementById("lvglEntryHeader").value.trim(),
+                    entry_call: document.getElementById("lvglEntryCall").value.trim() || "ui_init",
+                });
+            } else {
+                lvglSetStatus("正在请求本地 Agent 压缩完整 LVGL Web 工程并上传到远端 Server...");
+                agentResp = await localAgentPostJson("/api/lvgl/build_from_path", {
+                    project_path: projectPath,
+                    project_name: projectName,
+                    width,
+                    height,
+                });
+            }
             data = agentResp.remote_response || {};
         }
 
@@ -253,6 +291,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!document.getElementById("lvglSourceMode")) return;
     loadLvglWorkspaces();
     handleLvglSourceModeChange();
+    handleLvglLocalBuildModeChange();
     updateLvglPreviewSize();
     document.getElementById("lvglWidth").addEventListener("input", updateLvglPreviewSize);
     document.getElementById("lvglHeight").addEventListener("input", updateLvglPreviewSize);

@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field
 
 from config import load_settings
 from flasher import flash_firmware
-from project_zip import create_project_zip, validate_lvgl_project_dir, validate_project_dir
-from remote_upload import upload_lvgl_project_zip, upload_project_zip
+from project_zip import create_lvgl_ui_package_zip, create_project_zip, validate_lvgl_project_dir, validate_project_dir
+from remote_upload import upload_lvgl_project_zip, upload_lvgl_ui_package_zip, upload_project_zip
 from serial_ports import list_serial_ports
 
 
@@ -37,6 +37,17 @@ class BuildLvglFromPathRequest(BaseModel):
     project_name: str = "lvgl_project"
     width: int = 480
     height: int = 480
+
+
+class BuildLvglUiFromPathRequest(BaseModel):
+    project_path: str = Field(..., description="Local LVGL project path on Windows")
+    project_name: str = "lvgl_ui"
+    width: int = 480
+    height: int = 480
+    ui_roots: list[str] = Field(default_factory=list)
+    include_dirs: list[str] = Field(default_factory=list)
+    entry_call: str = "ui_init"
+    entry_header: str = "ui.h"
 
 
 app = FastAPI(title="ESP Local Upload Agent", version="0.1.0")
@@ -152,6 +163,50 @@ def build_lvgl_from_path(req: BuildLvglFromPathRequest) -> dict[str, Any]:
             status_code=502,
             detail={
                 "message": "Remote LVGL build server returned error",
+                "text": str(exc),
+            },
+        ) from exc
+
+
+@app.post("/api/lvgl/build_ui_from_path")
+def build_lvgl_ui_from_path(req: BuildLvglUiFromPathRequest) -> dict[str, Any]:
+    project_dir = Path(req.project_path).expanduser().resolve()
+
+    try:
+        zip_path = create_lvgl_ui_package_zip(
+            project_dir,
+            req.project_name,
+            req.width,
+            req.height,
+            req.ui_roots,
+            req.include_dirs,
+            req.entry_call,
+            req.entry_header,
+            settings.exclude_dir_names,
+            settings.exclude_file_suffixes,
+        )
+        return upload_lvgl_ui_package_zip(
+            settings.remote_build_url,
+            str(zip_path),
+            req.project_name,
+            req.width,
+            req.height,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "Failed to upload LVGL UI package",
+                "error": str(exc),
+            },
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "Remote LVGL UI build server returned error",
                 "text": str(exc),
             },
         ) from exc

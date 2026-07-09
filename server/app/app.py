@@ -63,6 +63,8 @@ LVGL_DEFAULT_WIDTH = int(os.getenv("LVGL_DEFAULT_WIDTH", "480"))
 LVGL_DEFAULT_HEIGHT = int(os.getenv("LVGL_DEFAULT_HEIGHT", "480"))
 LVGL_DEFAULT_VERSION = os.getenv("LVGL_DEFAULT_VERSION", "9.x")
 LVGL_EMSDK_IMAGE = os.getenv("LVGL_EMSDK_IMAGE", "emscripten/emsdk:latest")
+LVGL_GIT_REPO = os.getenv("LVGL_GIT_REPO", "https://github.com/lvgl/lvgl.git")
+LVGL_GIT_REF = os.getenv("LVGL_GIT_REF", "v9.3.0")
 LVGL_MAX_UPLOAD_SIZE = int(os.getenv("LVGL_MAX_UPLOAD_SIZE_MB", os.getenv("ESP_MAX_UPLOAD_SIZE_MB", "200"))) * 1024 * 1024
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 VERSION_SHORT_RE = re.compile(r"^\d+\.\d+$")
@@ -252,6 +254,234 @@ def resolve_lvgl_workspace_project_dir(workspace_path: str) -> Path:
         raise RuntimeError(f"Workspace path is not a directory: {workspace}")
 
     return find_lvgl_project_root(workspace)
+
+
+def load_lvgl_ui_manifest(workspace: Path) -> Optional[Dict[str, Any]]:
+    manifest_path = workspace / "lvgl_sim.json"
+    if not manifest_path.exists():
+        return None
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Invalid lvgl_sim.json: {exc}") from exc
+
+    if not isinstance(manifest, dict):
+        raise RuntimeError("lvgl_sim.json must be an object")
+
+    if manifest.get("source_type") != "ui_package":
+        raise RuntimeError("Unsupported lvgl_sim.json source_type")
+
+    return manifest
+
+
+def normalize_lvgl_entry_call(value: Any) -> str:
+    item = str(value or "ui_init").strip()
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", item):
+        return f"{item}()"
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\(\)", item):
+        return item
+    raise RuntimeError("LVGL UI entry call must be a function name or empty function call, for example ui_init")
+
+
+def normalize_optional_header(value: Any) -> str:
+    item = str(value or "").strip().replace("\\", "/").strip("/")
+    if not item:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9_./-]+\.h", item) or item.startswith("../") or "/../" in item:
+        raise RuntimeError("LVGL UI entry header must be a relative .h path")
+    return item
+
+
+def normalize_manifest_dirs(values: Any) -> List[str]:
+    if not isinstance(values, list):
+        return []
+
+    result: List[str] = []
+    seen = set()
+    for value in values:
+        item = str(value or "").strip().replace("\\", "/").strip("/")
+        if not item:
+            continue
+        if item.startswith("../") or "/../" in item or item.startswith("/"):
+            raise RuntimeError(f"Invalid LVGL UI relative path: {item}")
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
+def is_lvgl_ui_source(path: Path) -> bool:
+    if path.suffix.lower() not in {".c", ".cc", ".cpp", ".cxx"}:
+        return False
+    if path.name in {"main.c", "freertos_main.c", "freertos_posix_port.c", "hal.c", "mouse_cursor_icon.c"}:
+        return False
+    parts = set(path.parts)
+    if parts.intersection({"hal", "freertos", "FreeRTOS", "build", "bin", ".git"}):
+        return False
+    return True
+
+
+def cmake_quote(value: str) -> str:
+    return '"' + value.replace("\\", "/").replace('"', '\\"') + '"'
+
+
+def write_lvgl_ui_main(main_path: Path, entry_call: str, entry_header: str) -> None:
+    header_block = ""
+    if entry_header:
+        header_block = f'#if __has_include("{entry_header}")\n#include "{entry_header}"\n#endif\n'
+
+    main_path.write_text(
+        f"""#include "lvgl/lvgl.h"
+#include "lvgl/demos/lv_demos.h"
+#include "lvgl/examples/lv_examples.h"
+#include <emscripten.h>
+{header_block}
+static void lvgl_tick(void * user_data)
+{{
+    (void)user_data;
+    lv_timer_handler();
+}}
+
+int main(void)
+{{
+    lv_init();
+
+    lv_display_t * display = lv_sdl_window_create(LVGL_SIM_WIDTH, LVGL_SIM_HEIGHT);
+    lv_display_set_default(display);
+
+    lv_indev_t * mouse = lv_sdl_mouse_create();
+    lv_indev_set_display(mouse, display);
+
+    lv_indev_t * mousewheel = lv_sdl_mousewheel_create();
+    lv_indev_set_display(mousewheel, display);
+
+    lv_indev_t * keyboard = lv_sdl_keyboard_create();
+    lv_indev_set_display(keyboard, display);
+
+    {entry_call};
+
+    emscripten_set_main_loop_arg(lvgl_tick, NULL, 0, 1);
+    return 0;
+}}
+""",
+        encoding="utf-8",
+    )
+
+
+def write_lvgl_ui_conf(conf_path: Path) -> None:
+    conf_path.write_text(
+        """#ifndef LV_CONF_H
+#define LV_CONF_H
+
+#define LV_COLOR_DEPTH 32
+#define LV_USE_OS LV_OS_NONE
+#define LV_USE_LOG 1
+#define LV_LOG_LEVEL LV_LOG_LEVEL_WARN
+#define LV_USE_SDL 1
+#define LV_USE_DRAW_SDL 0
+#define LV_USE_DEMO_WIDGETS 1
+#define LV_USE_DEMO_BENCHMARK 1
+#define LV_USE_DEMO_STRESS 1
+#define LV_USE_DEMO_RENDER 1
+#define LV_USE_PERF_MONITOR 1
+#define LV_USE_MEM_MONITOR 1
+
+#endif
+""",
+        encoding="utf-8",
+    )
+
+
+def prepare_lvgl_ui_scaffold(workspace: Path, manifest: Dict[str, Any], width: int, height: int) -> Path:
+    entry_call = normalize_lvgl_entry_call(manifest.get("entry_call"))
+    entry_header = normalize_optional_header(manifest.get("entry_header"))
+    include_dirs = normalize_manifest_dirs(manifest.get("include_dirs"))
+
+    web_project = workspace / "_lvgl_web_project"
+    package_dir = web_project / "ui_package"
+    src_dir = web_project / "src"
+
+    remove_path_if_managed(web_project, (WORKSPACE_DIR,))
+    package_dir.mkdir(parents=True, exist_ok=True)
+    src_dir.mkdir(parents=True, exist_ok=True)
+
+    for path in workspace.rglob("*"):
+        if web_project in path.parents or path == web_project:
+            continue
+        if not path.is_file() or path.name == "lvgl_sim.json":
+            continue
+        target = package_dir / path.relative_to(workspace)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+
+    source_files = [
+        path.relative_to(web_project).as_posix()
+        for path in sorted(package_dir.rglob("*"))
+        if path.is_file() and is_lvgl_ui_source(path.relative_to(package_dir))
+    ]
+
+    include_paths = ['"${CMAKE_CURRENT_SOURCE_DIR}/ui_package"']
+    for item in include_dirs:
+        include_paths.append(f'"${{CMAKE_CURRENT_SOURCE_DIR}}/ui_package/{item}"')
+
+    source_lines = "\n".join(f"    {cmake_quote(item)}" for item in source_files)
+    include_lines = "\n".join(f"    {item}" for item in include_paths)
+
+    (web_project / "CMakeLists.txt").write_text(
+        f"""cmake_minimum_required(VERSION 3.20)
+project(lvgl_ui_web C CXX)
+
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_EXECUTABLE_SUFFIX ".html")
+set(LV_BUILD_EXAMPLES ON CACHE BOOL "" FORCE)
+set(LV_BUILD_DEMOS ON CACHE BOOL "" FORCE)
+
+include(FetchContent)
+FetchContent_Declare(
+    lvgl
+    GIT_REPOSITORY {cmake_quote(LVGL_GIT_REPO)}
+    GIT_TAG {cmake_quote(LVGL_GIT_REF)}
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(lvgl)
+
+set(UI_SOURCES
+{source_lines}
+)
+
+add_executable(index src/main.c ${{UI_SOURCES}})
+target_compile_definitions(index PRIVATE
+    LV_CONF_INCLUDE_SIMPLE
+    LVGL_SIM_WIDTH={width}
+    LVGL_SIM_HEIGHT={height}
+)
+target_include_directories(index PRIVATE
+{include_lines}
+    "${{CMAKE_CURRENT_SOURCE_DIR}}"
+)
+set(LVGL_OPTIONAL_LIBS "")
+if(TARGET lvgl::examples)
+    list(APPEND LVGL_OPTIONAL_LIBS lvgl::examples)
+endif()
+if(TARGET lvgl::demos)
+    list(APPEND LVGL_OPTIONAL_LIBS lvgl::demos)
+endif()
+target_link_libraries(index PRIVATE lvgl ${{LVGL_OPTIONAL_LIBS}})
+target_link_options(index PRIVATE
+    -sUSE_SDL=2
+    -sALLOW_MEMORY_GROWTH=1
+    -sASSERTIONS=1
+)
+""",
+        encoding="utf-8",
+    )
+
+    write_lvgl_ui_conf(web_project / "lv_conf.h")
+    write_lvgl_ui_main(src_dir / "main.c", entry_call, entry_header)
+
+    return web_project
 
 
 def normalize_lvgl_dimension(value: Any, default: int, field: str) -> int:
@@ -961,13 +1191,18 @@ def lvgl_build_worker(
             return
 
         try:
-            if source_mode == "upload_zip":
+            if source_mode in {"upload_zip", "ui_upload"}:
                 if upload_path is None or workspace is None:
                     raise RuntimeError("Missing LVGL upload workspace")
 
                 update_job(job_id, status="extracting", message="Extracting uploaded LVGL zip")
                 safe_extract(upload_path, workspace)
-                project_dir = find_lvgl_project_root(workspace)
+                manifest = load_lvgl_ui_manifest(workspace)
+                if manifest:
+                    update_job(job_id, status="generating", message="Generating LVGL WebAssembly simulator project")
+                    project_dir = prepare_lvgl_ui_scaffold(workspace, manifest, width, height)
+                else:
+                    project_dir = find_lvgl_project_root(workspace)
             else:
                 if not workspace_path:
                     raise RuntimeError("Missing LVGL remote workspace path")
@@ -1371,6 +1606,101 @@ async def build_lvgl_from_upload(
         kwargs={
             "job_id": job_id,
             "source_mode": "upload_zip",
+            "project_name": project_name,
+            "width": width,
+            "height": height,
+            "upload_path": upload_path,
+            "workspace": workspace,
+        },
+        daemon=True,
+    )
+    worker.start()
+
+    return {
+        "job_id": job_id,
+        "status": "running",
+        "status_url": f"/api/lvgl/jobs/{job_id}",
+        "log_url": f"/api/lvgl/logs/{job_id}",
+    }
+
+
+@app.post("/api/lvgl/build/ui-upload")
+async def build_lvgl_ui_from_upload(
+    file: UploadFile = File(...),
+    project_name: str = Form("lvgl_ui"),
+    width: int = Form(LVGL_DEFAULT_WIDTH),
+    height: int = Form(LVGL_DEFAULT_HEIGHT),
+):
+    width = normalize_lvgl_dimension(width, LVGL_DEFAULT_WIDTH, "width")
+    height = normalize_lvgl_dimension(height, LVGL_DEFAULT_HEIGHT, "height")
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+
+    if not file.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only .zip file is supported")
+
+    job_id = make_job_id()
+    upload_path = UPLOAD_DIR / f"{job_id}_lvgl_ui.zip"
+    workspace = WORKSPACE_DIR / f"{job_id}_lvgl_ui"
+    workspace.mkdir(parents=True, exist_ok=True)
+
+    size = 0
+
+    with upload_path.open("wb") as out:
+        while True:
+            chunk = await file.read(1024 * 1024)
+
+            if not chunk:
+                break
+
+            size += len(chunk)
+
+            if size > LVGL_MAX_UPLOAD_SIZE:
+                out.close()
+                upload_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="Uploaded file too large")
+
+            out.write(chunk)
+
+    project_name = project_name.strip() or "lvgl_ui"
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    save_job(
+        job_id,
+        {
+            "status": "uploaded",
+            "tool_type": "lvgl_simulator",
+            "source_mode": "ui_upload",
+            "message": "LVGL UI package upload completed",
+            "project_name": project_name,
+            "width": width,
+            "height": height,
+            "lvgl_version": LVGL_DEFAULT_VERSION,
+            "lvgl_git_repo": LVGL_GIT_REPO,
+            "lvgl_git_ref": LVGL_GIT_REF,
+            "emsdk_image": LVGL_EMSDK_IMAGE,
+            "upload_file": str(upload_path),
+            "workspace": str(workspace),
+            "log": str(log_file(job_id)),
+            "created_at": now,
+            "finished_at": None,
+            "artifact": None,
+            "artifact_name": None,
+            "artifact_url": None,
+            "download_url": None,
+            "preview_dir": str(LVGL_PREVIEW_DIR / job_id),
+            "preview_url": None,
+            "log_url": f"/api/lvgl/logs/{job_id}",
+        },
+    )
+    cleanup_old_build_records()
+
+    worker = threading.Thread(
+        target=lvgl_build_worker,
+        kwargs={
+            "job_id": job_id,
+            "source_mode": "ui_upload",
             "project_name": project_name,
             "width": width,
             "height": height,
