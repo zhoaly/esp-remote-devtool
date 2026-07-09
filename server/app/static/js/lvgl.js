@@ -337,9 +337,93 @@ async function refreshLvglLog() {
     }
 }
 
+/**
+ * Load past LVGL build jobs and render them in the history table.
+ */
+async function loadLvglJobHistory() {
+    const tbody = document.getElementById("lvglJobsBody");
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6">加载中...</td></tr>';
+
+    try {
+        const jobs = await apiGet("/api/lvgl/jobs");
+        tbody.innerHTML = "";
+
+        if (!jobs.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center">暂无构建记录。</td></tr>';
+            return;
+        }
+
+        jobs.forEach((job) => {
+            const tr = document.createElement("tr");
+
+            /* Status badge */
+            const statusClass = job.status === "success" ? "tag success"
+                : job.status === "failed" ? "tag failed"
+                : "tag";
+            const statusHtml = `<span class="${statusClass}">${job.status || "?"}</span>`;
+
+            /* Dimensions */
+            const dims = job.width && job.height ? `${job.width} × ${job.height}` : "-";
+
+            /* Action links */
+            const actions = [];
+            if (job.preview_url) {
+                actions.push(`<a href="#" class="lvgl-history-preview" data-preview="${job.preview_url}" data-log="${job.log_url || ""}" data-jobid="${job.job_id}">预览</a>`);
+            }
+            if (job.log_url) {
+                actions.push(`<a href="${REMOTE_BASE}${job.log_url}" target="_blank">日志</a>`);
+            }
+            if (job.download_url) {
+                actions.push(`<a href="${REMOTE_BASE}${job.download_url}" target="_blank">下载</a>`);
+            }
+
+            tr.innerHTML = `
+                <td title="${job.job_id || ""}">${(job.job_id || "").slice(0, 22)}…</td>
+                <td>${statusHtml}</td>
+                <td>${job.project_name || "-"}</td>
+                <td>${dims}</td>
+                <td>${job.created_at || "-"}</td>
+                <td class="job-actions">${actions.join(" · ") || "-"}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        /* Bind click on preview links to load the preview in the iframe */
+        tbody.querySelectorAll(".lvgl-history-preview").forEach((link) => {
+            link.addEventListener("click", (e) => {
+                e.preventDefault();
+                const previewUrl = link.dataset.preview;
+                const jobId = link.dataset.jobid;
+                const logUrl = link.dataset.log;
+
+                /* Switch the current job context */
+                currentJobId = jobId;
+                setText("lvglJobIdCard", jobId);
+                lvglSetStatus(`Loaded preview for job ${jobId}`, "success");
+                setLvglPreview(previewUrl);
+
+                /* Also load the log if available */
+                if (logUrl) {
+                    apiGetText(logUrl).then((text) => {
+                        const box = document.getElementById("lvglLogBox");
+                        if (box) {
+                            box.textContent = text || "暂无构建日志。";
+                            box.scrollTop = box.scrollHeight;
+                        }
+                    }).catch(() => {});
+                }
+            });
+        });
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="color:var(--danger);text-align:center">加载失败：${err.message}</td></tr>`;
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     if (!document.getElementById("lvglSourceMode")) return;
     loadLvglWorkspaces();
+    loadLvglJobHistory();
     handleLvglSourceModeChange();
     handleLvglLocalBuildModeChange();
     updateLvglPreviewSize();

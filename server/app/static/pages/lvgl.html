@@ -150,6 +150,30 @@
                 <div id="lvglLogBox" class="log-box">暂无构建日志。</div>
             </div>
         </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <h2>5. Build History</h2>
+                <button class="compact-button secondary" type="button" onclick="loadLvglJobHistory()" title="刷新构建记录">刷新</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Job ID</th>
+                            <th>状态</th>
+                            <th>项目名</th>
+                            <th>尺寸</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lvglJobsBody">
+                        <tr><td colspan="6">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </div>
 
     <script src="/static/js/common.js?v=nav-registry-20260709"></script>

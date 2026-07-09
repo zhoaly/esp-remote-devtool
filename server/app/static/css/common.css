@@ -1070,6 +1070,27 @@ th { color: #fed7aa; font-size: 13px; }
     to   { opacity: 1; transform: scale(1); }
 }
 
+/* ── LVGL Build History table ── */
+#lvglJobsBody td {
+    font-size: 13px;
+}
+#lvglJobsBody .job-actions {
+    white-space: nowrap;
+}
+#lvglJobsBody .job-actions a {
+    color: var(--accent);
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+#lvglJobsBody .job-actions a:hover {
+    color: #fed7aa;
+    text-decoration: underline;
+}
+#lvglJobsBody .tag {
+    font-size: 11px;
+    padding: 2px 8px;
+}
+
 @media (max-width: 860px) {
     .panel-heading,
     .list-row {
