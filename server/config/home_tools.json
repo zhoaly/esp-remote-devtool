@@ -1,0 +1,65 @@
+{
+  "title": "ZLYHUB开发工具集",
+  "subtitle": "统一管理远端开发工具、设备发布流程和后续个人服务。",
+  "sections": [
+    {
+      "id": "active",
+      "title": "已上线工具",
+      "description": "当前可以直接进入使用的工具集。",
+      "order": 10,
+      "enabled": true
+    },
+    {
+      "id": "planned",
+      "title": "计划接入",
+      "description": "预留在主页下方的后续工具入口。",
+      "order": 20,
+      "enabled": true
+    }
+  ],
+  "tools": [
+    {
+      "id": "esp-remote-devtool",
+      "section_id": "active",
+      "title": "ESP远端编译工具集",
+      "description": "集中管理 ESP-IDF 远端编译、本地烧录、OTA 发布、构建历史和只读配置。",
+      "href": "/ui",
+      "status": "available",
+      "status_label": "已上线",
+      "order": 10,
+      "enabled": true,
+      "features": ["远端编译", "本地烧录", "OTA发布", "构建历史"],
+      "actions": [
+        {"label": "进入工具集", "href": "/ui", "primary": true},
+        {"label": "远端编译", "href": "/ui/build"},
+        {"label": "OTA发布", "href": "/ui/ota"}
+      ]
+    },
+    {
+      "id": "lvgl-remote-simulator",
+      "section_id": "planned",
+      "title": "LVGL远端模拟器",
+      "description": "预留 LVGL UI 远端模拟、预览和调试入口。",
+      "href": "",
+      "status": "planned",
+      "status_label": "计划中",
+      "order": 10,
+      "enabled": true,
+      "features": ["远端模拟", "UI预览", "调试入口"],
+      "actions": []
+    },
+    {
+      "id": "personal-storage",
+      "section_id": "planned",
+      "title": "个人存储",
+      "description": "预留个人文件、构建产物和配置资料的统一存储入口。",
+      "href": "",
+      "status": "planned",
+      "status_label": "计划中",
+      "order": 20,
+      "enabled": true,
+      "features": ["文件管理", "产物归档", "资料存储"],
+      "actions": []
+    }
+  ]
+}

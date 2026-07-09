@@ -12,9 +12,10 @@ import uuid
 import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 
@@ -34,6 +35,7 @@ JOB_DIR = DATA_DIR / "jobs"
 STATIC_DIR = BASE_DIR / "app" / "static"
 CONFIG_DIR = BASE_DIR / "config"
 WORKSPACES_CONFIG = CONFIG_DIR / "workspaces.json"
+HOME_TOOLS_CONFIG = CONFIG_DIR / "home_tools.json"
 
 BUILD_SCRIPT = BASE_DIR / "scripts" / "build_uploaded_project.sh"
 PACKAGE_SCRIPT = BASE_DIR / "scripts" / "package_firmware.sh"
@@ -59,6 +61,13 @@ VERSION_SHORT_RE = re.compile(r"^\d+\.\d+$")
 IDF_IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$")
 
 BUILD_LOCK = threading.Lock()
+
+DEFAULT_HOME_TOOL_REGISTRY: Dict[str, Any] = {
+    "title": "ZLYHUB开发工具集",
+    "subtitle": "统一管理远端开发工具、设备发布流程和后续个人服务。",
+    "sections": [],
+    "tools": [],
+}
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -300,6 +309,46 @@ def normalize_ota_version(version: Optional[str]) -> Optional[str]:
 def absolute_url(request: Request, path: str) -> str:
     base_url = OTA_PUBLIC_BASE_URL or str(request.url_for("index")).rstrip("/")
     return base_url + path
+
+
+def ota_latest_path(project: str, chip: str, channel: str) -> str:
+    query = urlencode({"project": project, "chip": chip, "channel": channel})
+    return f"/api/ota/latest?{query}"
+
+
+def ota_manifest_path(release_id: str) -> str:
+    return f"/api/ota/manifest/{release_id}"
+
+
+def ota_firmware_path(release_id: str) -> str:
+    return f"/api/ota/firmware/{release_id}/app.bin"
+
+
+def ota_release_urls(request: Request, meta: Dict[str, Any]) -> Dict[str, str]:
+    release_id = safe_name(str(meta.get("release_id") or ""), "release_id")
+    project = safe_name(str(meta.get("project") or ""), "project")
+    chip = safe_name(str(meta.get("chip") or ""), "chip")
+    channel = safe_name(str(meta.get("channel") or "stable"), "channel")
+
+    return {
+        "manifest_url": absolute_url(request, ota_latest_path(project, chip, channel)),
+        "manifest_direct_url": absolute_url(request, ota_manifest_path(release_id)),
+        "firmware_url": absolute_url(request, ota_firmware_path(release_id)),
+    }
+
+
+def manifest_with_current_urls(request: Request, release_id: str, manifest: Dict[str, Any]) -> Dict[str, Any]:
+    current = dict(manifest)
+    current["url"] = absolute_url(request, ota_firmware_path(release_id))
+    return current
+
+
+def meta_with_current_urls(request: Request, meta: Dict[str, Any]) -> Dict[str, Any]:
+    current = dict(meta)
+    urls = ota_release_urls(request, current)
+    current.update(urls)
+    current["url"] = urls["firmware_url"]
+    return current
 
 
 def read_project_version(project_dir: Path) -> Optional[str]:
@@ -723,16 +772,80 @@ def workspace_build_worker(
             log.write("==================================\n")
 
 
-@app.get("/")
-def index() -> Dict[str, str]:
+def server_info() -> Dict[str, str]:
     return {
         "name": "ESP Remote Build Server",
         "docs": "/docs",
         "ui": "/ui",
+        "home": "/home",
         "default_project": DEFAULT_PROJECT_NAME,
         "default_target": DEFAULT_TARGET,
         "default_idf_image": DEFAULT_IDF_IMAGE,
     }
+
+
+def ordered_enabled_items(items: Any) -> List[Dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+
+    def sort_key(item: Dict[str, Any]) -> Tuple[int, str]:
+        try:
+            order = int(item.get("order", 1000))
+        except (TypeError, ValueError):
+            order = 1000
+        return order, str(item.get("id", ""))
+
+    enabled_items = [
+        item
+        for item in items
+        if isinstance(item, dict) and item.get("enabled", True)
+    ]
+    return sorted(enabled_items, key=sort_key)
+
+
+def load_home_tool_registry() -> Dict[str, Any]:
+    registry = DEFAULT_HOME_TOOL_REGISTRY
+
+    if HOME_TOOLS_CONFIG.exists():
+        try:
+            loaded = json.loads(HOME_TOOLS_CONFIG.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=500, detail=f"Invalid home tools config JSON: {exc}") from exc
+
+        if not isinstance(loaded, dict):
+            raise HTTPException(status_code=500, detail="Home tools config must be an object")
+
+        registry = loaded
+
+    sections = ordered_enabled_items(registry.get("sections"))
+    section_ids = {str(section.get("id")) for section in sections}
+    tools = [
+        tool
+        for tool in ordered_enabled_items(registry.get("tools"))
+        if str(tool.get("section_id")) in section_ids
+    ]
+
+    return {
+        "title": str(registry.get("title") or DEFAULT_HOME_TOOL_REGISTRY["title"]),
+        "subtitle": str(registry.get("subtitle") or DEFAULT_HOME_TOOL_REGISTRY["subtitle"]),
+        "sections": sections,
+        "tools": tools,
+    }
+
+
+@app.get("/")
+def index() -> RedirectResponse:
+    return RedirectResponse(url="/home")
+
+
+@app.get("/api/info")
+def api_info() -> Dict[str, str]:
+    return server_info()
+
+
+@app.get("/api/home/tools")
+def api_home_tools() -> Dict[str, Any]:
+    return load_home_tool_registry()
 
 
 @app.get("/api/idf-images")
@@ -756,6 +869,11 @@ def ui_file(relative_path: str) -> FileResponse:
 @app.get("/ui")
 def ui_home() -> FileResponse:
     return ui_file("index.html")
+
+
+@app.get("/home")
+def zlyhub_home() -> FileResponse:
+    return ui_file("home.html")
 
 
 @app.get("/ui/build")
@@ -1010,9 +1128,9 @@ def publish_ota_release(job_id: str, payload: Dict[str, Any], request: Request):
     release_app = release_dir / "app.bin"
     shutil.copy2(app_bin, release_app)
 
-    firmware_path = f"/api/ota/firmware/{release_id}/app.bin"
-    manifest_path = f"/api/ota/manifest/{release_id}"
-    latest_path = f"/api/ota/latest?project={project}&chip={chip}&channel={channel}"
+    firmware_path = ota_firmware_path(release_id)
+    manifest_path = ota_manifest_path(release_id)
+    latest_path = ota_latest_path(project, chip, channel)
     firmware_url = absolute_url(request, firmware_path)
     manifest_url = absolute_url(request, latest_path)
 
@@ -1049,10 +1167,19 @@ def publish_ota_release(job_id: str, payload: Dict[str, Any], request: Request):
 
 
 @app.get("/api/ota/latest")
-def get_latest_ota_manifest(project: str, chip: str, channel: str = "stable"):
+def get_latest_ota_manifest(request: Request, project: str, chip: str, channel: str = "stable"):
     project = safe_name(project, "project")
     chip = safe_name(chip, "chip")
     channel = safe_name(channel, "channel")
+
+    releases = list_ota_release_meta(project=project, chip=chip, channel=channel)
+    for release in releases:
+        release_id = safe_name(str(release.get("release_id") or ""), "release_id")
+        path = OTA_RELEASE_DIR / release_id / "manifest.json"
+        if path.exists():
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            return manifest_with_current_urls(request, release_id, manifest)
+
     manifest = latest_channel_manifest(channel, project, chip)
     if not manifest:
         raise HTTPException(status_code=404, detail="OTA manifest not found")
@@ -1060,12 +1187,13 @@ def get_latest_ota_manifest(project: str, chip: str, channel: str = "stable"):
 
 
 @app.get("/api/ota/manifest/{release_id}")
-def get_ota_manifest(release_id: str):
+def get_ota_manifest(request: Request, release_id: str):
     release_id = safe_name(release_id, "release_id")
     path = OTA_RELEASE_DIR / release_id / "manifest.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="OTA manifest not found")
-    return json.loads(path.read_text(encoding="utf-8"))
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    return manifest_with_current_urls(request, release_id, manifest)
 
 
 @app.get("/api/ota/firmware/{release_id}/app.bin")
@@ -1078,12 +1206,16 @@ def download_ota_firmware(release_id: str):
 
 
 @app.get("/api/ota/releases")
-def list_ota_releases(project: Optional[str] = None, chip: Optional[str] = None):
+def list_ota_releases(request: Request, project: Optional[str] = None, chip: Optional[str] = None):
     if project:
         project = safe_name(project, "project")
     if chip:
         chip = safe_name(chip, "chip")
-    return {"releases": list_ota_release_meta(project=project, chip=chip)}
+    releases = [
+        meta_with_current_urls(request, meta)
+        for meta in list_ota_release_meta(project=project, chip=chip)
+    ]
+    return {"releases": releases}
 
 
 @app.delete("/api/ota/releases/{release_id}")

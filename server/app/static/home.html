@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZLYHUB开发工具集</title>
+    <link rel="stylesheet" href="/static/css/common.css?v=responsive-card-status-fix-20260709">
+</head>
+<body>
+    <div class="shell">
+        <nav class="top-nav">
+            <a class="active" href="/home">ZLYHUB</a>
+            <a href="/ui">ESP工具集</a>
+            <a href="/docs">API Docs</a>
+        </nav>
+
+        <section class="hero">
+            <div class="eyebrow">ZLYHUB</div>
+            <h1 id="homeTitle">ZLYHUB开发工具集</h1>
+            <div class="hero-copy" id="homeSubtitle">正在加载工具注册表...</div>
+            <div class="hero-grid">
+                <div class="stat">
+                    <div class="stat-label">Remote Host</div>
+                    <div class="stat-value" id="remoteHostCard"></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Local Agent</div>
+                    <div class="stat-value" id="localAgentCard"></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Registry</div>
+                    <div class="stat-value" id="homeRegistryState">loading</div>
+                </div>
+            </div>
+        </section>
+
+        <div id="homeSections" class="home-sections">
+            <section class="panel">
+                <div class="empty-state">正在加载工具列表...</div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/static/js/common.js?v=select-layer-20260704"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/home.js?v=home-registry-20260709"></script>
+</body>
+</html>
+
+
+

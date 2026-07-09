@@ -2,7 +2,7 @@ async function loadSettings() {
     setText("serverUrl", REMOTE_BASE);
     setText("agentUrl", LOCAL_AGENT);
     try {
-        const data = await apiGet("/");
+        const data = await apiGet("/api/info");
         setText("defaultProject", data.default_project || "-");
         setText("defaultTarget", data.default_target || "-");
         setText("defaultIdfImage", data.default_idf_image || "-");
