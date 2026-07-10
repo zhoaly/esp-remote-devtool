@@ -47,7 +47,10 @@
       "enabled": true,
       "features": ["WASM预览", "远端编译", "日志调试"],
       "actions": [
-        {"label": "进入模拟器", "href": "/tools/lvgl", "primary": true}
+        {"label": "进入模拟器", "href": "/tools/lvgl", "primary": true},
+        {"label": "远端编译", "href": "/tools/lvgl/build"},
+        {"label": "预览查看", "href": "/tools/lvgl/preview"},
+        {"label": "编译历史", "href": "/tools/lvgl/jobs"}
       ]
     },
     {

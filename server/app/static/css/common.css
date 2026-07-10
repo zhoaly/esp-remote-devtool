@@ -767,7 +767,8 @@ th { color: #fed7aa; font-size: 13px; }
     background: linear-gradient(180deg, rgba(253, 186, 116, 0.95), rgba(249, 115, 22, 0.76));
 }
 #otaJobsList .empty-state,
-#flashJobsList .empty-state {
+#flashJobsList .empty-state,
+#lvglPreviewJobsList .empty-state {
     min-height: auto;
 }
 .list-row {
@@ -1086,6 +1087,12 @@ th { color: #fed7aa; font-size: 13px; }
     color: #fed7aa;
     text-decoration: underline;
 }
+
+.links a.disabled {
+    pointer-events: none;
+    opacity: 0.45;
+}
+
 #lvglJobsBody .tag {
     font-size: 11px;
     padding: 2px 8px;

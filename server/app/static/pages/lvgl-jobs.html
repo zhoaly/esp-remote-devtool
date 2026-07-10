@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LVGL Build History - ZLYHUB</title>
+    <link rel="stylesheet" href="/static/css/common.css?v=lvgl-pages-20260710">
+</head>
+<body>
+    <div class="shell">
+        <nav class="top-nav"></nav>
+
+        <section class="hero">
+            <div class="eyebrow">LVGL Jobs</div>
+            <h1>Build history.</h1>
+            <div class="hero-copy">
+                Shows the retained LVGL simulator builds. Older records are pruned server-side using the configured build record limit.
+            </div>
+        </section>
+
+        <section class="panel table-wrap">
+            <div class="panel-heading">
+                <h2>LVGL Build History</h2>
+                <button class="secondary compact-button" type="button" onclick="loadLvglJobs()">Refresh</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Job ID</th>
+                        <th>Status</th>
+                        <th>Project</th>
+                        <th>Size</th>
+                        <th>Source</th>
+                        <th>Created</th>
+                        <th>Finished</th>
+                        <th>Links</th>
+                    </tr>
+                </thead>
+                <tbody id="lvglJobsBody">
+                    <tr><td colspan="8">Loading...</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <script src="/static/js/common.js?v=lvgl-pages-20260710"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/lvgl-common.js?v=lvgl-pages-20260710"></script>
+    <script src="/static/js/lvgl-jobs.js?v=lvgl-pages-20260710"></script>
+</body>
+</html>

@@ -17,9 +17,14 @@ const TOOL_SUB_NAV_ITEMS = {
     esp: [
         { label: "远端编译", href: "/tools/esp/build", exact: true },
         { label: "本地烧录", href: "/tools/esp/flash", exact: true },
-        { label: "OTA 发布", href: "/tools/esp/ota", exact: true },
+        { label: "OTA发布", href: "/tools/esp/ota", exact: true },
         { label: "构建历史", href: "/tools/esp/jobs", exact: true },
         { label: "设置", href: "/tools/esp/settings", exact: true },
+    ],
+    lvgl: [
+        { label: "远端编译", href: "/tools/lvgl/build", exact: true },
+        { label: "预览查看", href: "/tools/lvgl/preview", exact: true },
+        { label: "编译历史", href: "/tools/lvgl/jobs", exact: true },
     ],
 };
 
@@ -100,6 +105,13 @@ function renderNavLinks(nav, items) {
     });
 }
 
+function currentToolKey() {
+    const path = window.location.pathname;
+    if (path.startsWith("/tools/esp")) return "esp";
+    if (path.startsWith("/tools/lvgl")) return "lvgl";
+    return "";
+}
+
 function renderAppNavigation() {
     const topNav = document.querySelector(".top-nav");
     if (!topNav) return;
@@ -107,15 +119,16 @@ function renderAppNavigation() {
     renderNavLinks(topNav, GLOBAL_NAV_ITEMS);
 
     const existingSubNav = document.querySelector(".tool-sub-nav");
-    if (!window.location.pathname.startsWith("/tools/esp")) {
+    const toolKey = currentToolKey();
+    if (!toolKey) {
         if (existingSubNav) existingSubNav.remove();
         return;
     }
 
     const subNav = existingSubNav || document.createElement("nav");
     subNav.className = "tool-sub-nav";
-    subNav.setAttribute("aria-label", "ESP tool navigation");
-    renderNavLinks(subNav, TOOL_SUB_NAV_ITEMS.esp);
+    subNav.setAttribute("aria-label", `${toolKey.toUpperCase()} tool navigation`);
+    renderNavLinks(subNav, TOOL_SUB_NAV_ITEMS[toolKey]);
 
     if (!existingSubNav) {
         topNav.insertAdjacentElement("afterend", subNav);
@@ -125,6 +138,7 @@ function renderAppNavigation() {
 function initCommonChrome() {
     renderAppNavigation();
     setText("remoteBaseText", REMOTE_BASE + "/tools/esp");
+    setText("lvglRemoteBaseText", REMOTE_BASE + "/tools/lvgl");
     setText("remoteHostCard", REMOTE_BASE);
     setText("localAgentCard", LOCAL_AGENT);
     enhanceSelects();

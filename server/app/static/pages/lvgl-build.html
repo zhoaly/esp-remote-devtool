@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LVGL Remote Build - ZLYHUB</title>
+    <link rel="stylesheet" href="/static/css/common.css?v=lvgl-pages-20260710">
+</head>
+<body>
+    <div class="shell">
+        <nav class="top-nav"></nav>
+
+        <section class="hero">
+            <div class="hero-top">
+                <div>
+                    <div class="eyebrow">LVGL Remote Build</div>
+                    <h1>Build simulator output.</h1>
+                </div>
+            </div>
+            <div class="hero-copy">
+                Upload local LVGL UI sources through Local Agent or build directly from an allowlisted server workspace. Preview is handled on the Preview page.
+            </div>
+            <div class="hero-grid">
+                <div class="stat">
+                    <div class="stat-label">Remote Host</div>
+                    <div class="stat-value" id="remoteHostCard"></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Local Agent</div>
+                    <div class="stat-value" id="localAgentCard"></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Current Job</div>
+                    <div class="stat-value" id="lvglJobIdCard">idle</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>1. Project Setup</h2>
+            <div class="grid">
+                <div class="field full">
+                    <label for="lvglSourceMode">Source Mode</label>
+                    <select id="lvglSourceMode" onchange="handleLvglSourceModeChange()">
+                        <option value="local_path" selected>Local upload build</option>
+                        <option value="remote_workspace">Remote workspace build</option>
+                    </select>
+                    <div class="hint">Local mode uses Local Agent at <code>http://127.0.0.1:8765</code>. Remote mode uses server-side allowlisted workspaces.</div>
+                </div>
+
+                <div class="field full" id="lvglRemoteWorkspaceField" style="display: none;">
+                    <label for="lvglRemoteWorkspace">Remote Workspace</label>
+                    <select id="lvglRemoteWorkspace">
+                        <option value="">Loading LVGL workspaces...</option>
+                    </select>
+                    <div class="hint" id="lvglRemoteWorkspaceHint">Loaded from <code>/api/lvgl/workspaces</code>.</div>
+                </div>
+
+                <div class="field full lvgl-local-field">
+                    <label for="lvglLocalBuildMode">Local Upload Mode</label>
+                    <select id="lvglLocalBuildMode" onchange="handleLvglLocalBuildModeChange()">
+                        <option value="ui_package" selected>UI sources only</option>
+                        <option value="full_project">Full web project</option>
+                    </select>
+                    <div class="hint">UI-only mode extracts selected source folders and generates a browser simulator scaffold remotely.</div>
+                </div>
+
+                <div class="field full lvgl-local-field">
+                    <label for="lvglProjectPath">Windows LVGL Project Path</label>
+                    <input id="lvglProjectPath" value="C:\Users\13281\OneDrive\dev_projects\lv_port_pc_vscode" placeholder="C:\Users\13281\OneDrive\dev_projects\lvgl_ui_sim">
+                    <div class="hint">Full project mode requires a CMakeLists.txt project. UI-only mode uploads only selected source and include directories.</div>
+                </div>
+
+                <div class="field full lvgl-ui-field">
+                    <label for="lvglUiRoots">UI Source Folders</label>
+                    <input id="lvglUiRoots" placeholder="ui, src/ui, generated">
+                </div>
+
+                <div class="field full lvgl-ui-field">
+                    <label for="lvglIncludeDirs">Include Folders</label>
+                    <input id="lvglIncludeDirs" placeholder="ui, src/ui, generated, include">
+                </div>
+
+                <div class="field lvgl-ui-field">
+                    <label for="lvglEntryHeader">Entry Header</label>
+                    <input id="lvglEntryHeader" value="" placeholder="ui.h">
+                </div>
+
+                <div class="field lvgl-ui-field">
+                    <label for="lvglEntryCall">Entry Function</label>
+                    <input id="lvglEntryCall" value="lv_demo_widgets" placeholder="ui_init or lv_demo_widgets">
+                </div>
+
+                <div class="field">
+                    <label for="lvglProjectName">Project Name</label>
+                    <input id="lvglProjectName" value="lv_port_pc_vscode">
+                </div>
+
+                <div class="field">
+                    <label for="lvglVersion">LVGL Version</label>
+                    <input id="lvglVersion" value="9.x" disabled>
+                </div>
+
+                <div class="field">
+                    <label for="lvglWidth">Preview Width</label>
+                    <input id="lvglWidth" type="number" min="120" max="4096" value="320">
+                </div>
+
+                <div class="field">
+                    <label for="lvglHeight">Preview Height</label>
+                    <input id="lvglHeight" type="number" min="120" max="4096" value="480">
+                </div>
+            </div>
+            <div class="actions">
+                <button id="lvglStartBtn" class="primary" type="button" onclick="startLvglBuild()">Start Remote Build</button>
+                <button class="secondary" type="button" onclick="refreshLvglLog()">Refresh Build Log</button>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>2. Build Status</h2>
+            <div id="lvglStatusBox" class="status">Waiting to start.</div>
+            <div class="links" id="lvglLinkArea"></div>
+        </section>
+
+        <section class="panel">
+            <h2>3. Build Log</h2>
+            <div id="lvglLogBox" class="log-box">No build log yet.</div>
+        </section>
+    </div>
+
+    <script src="/static/js/common.js?v=lvgl-pages-20260710"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/lvgl-common.js?v=lvgl-pages-20260710"></script>
+    <script src="/static/js/lvgl-build.js?v=lvgl-pages-20260710"></script>
+</body>
+</html>

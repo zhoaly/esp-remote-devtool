@@ -147,11 +147,20 @@ def cleanup_job_record(job_id: str, data: Dict[str, Any], job_path: Path) -> Non
     job_path.unlink(missing_ok=True)
 
 
+def build_record_group(data: Dict[str, Any]) -> str:
+    tool_type = str(data.get("tool_type") or "esp_firmware")
+    if tool_type == "lvgl_simulator":
+        return "lvgl_simulator"
+    if tool_type == "esp_firmware":
+        return "esp_firmware"
+    return f"other:{tool_type}"
+
+
 def cleanup_old_build_records() -> None:
     if MAX_BUILD_RECORDS < 1:
         return
 
-    jobs: List[Tuple[str, str, Path, Dict[str, Any]]] = []
+    grouped_jobs: Dict[str, List[Tuple[str, str, Path, Dict[str, Any]]]] = {}
 
     for path in JOB_DIR.glob("*.json"):
         try:
@@ -161,12 +170,14 @@ def cleanup_old_build_records() -> None:
 
         job_id = str(data.get("job_id") or path.stem)
         sort_key = str(data.get("created_at") or path.stem)
-        jobs.append((sort_key, job_id, path, data))
+        group = build_record_group(data)
+        grouped_jobs.setdefault(group, []).append((sort_key, job_id, path, data))
 
-    jobs.sort(key=lambda item: item[0], reverse=True)
+    for jobs in grouped_jobs.values():
+        jobs.sort(key=lambda item: item[0], reverse=True)
 
-    for _, job_id, path, data in jobs[MAX_BUILD_RECORDS:]:
-        cleanup_job_record(job_id, data, path)
+        for _, job_id, path, data in jobs[MAX_BUILD_RECORDS:]:
+            cleanup_job_record(job_id, data, path)
 
 
 cleanup_old_build_records()
@@ -314,6 +325,10 @@ def lvgl_demo_sources_for_entry(entry_call: str) -> List[str]:
             "demos/widgets/lv_demo_widgets_profile.c",
             "demos/widgets/lv_demo_widgets_shop.c",
         ],
+        "lv_demo_benchmark": [
+            "demos/lv_demos.c",
+            "demos/benchmark/lv_demo_benchmark.c",
+        ],
     }.get(match.group(1), [])
 
 
@@ -405,9 +420,11 @@ int main(void)
     )
 
 
-def write_lvgl_ui_conf(conf_path: Path) -> None:
+def write_lvgl_ui_conf(conf_path: Path, entry_call: str = "") -> None:
+    demo_widgets = "1" if "lv_demo_widgets" in entry_call else "0"
+    demo_benchmark = "1" if "lv_demo_benchmark" in entry_call else "0"
     conf_path.write_text(
-        """#ifndef LV_CONF_H
+        f"""#ifndef LV_CONF_H
 #define LV_CONF_H
 
 #define LV_COLOR_DEPTH 32
@@ -416,8 +433,8 @@ def write_lvgl_ui_conf(conf_path: Path) -> None:
 #define LV_LOG_LEVEL LV_LOG_LEVEL_WARN
 #define LV_USE_SDL 1
 #define LV_USE_DRAW_SDL 0
-#define LV_USE_DEMO_WIDGETS 1
-#define LV_USE_DEMO_BENCHMARK 0
+#define LV_USE_DEMO_WIDGETS {demo_widgets}
+#define LV_USE_DEMO_BENCHMARK {demo_benchmark}
 #define LV_USE_DEMO_STRESS 0
 #define LV_USE_DEMO_RENDER 0
 #define LV_USE_PERF_MONITOR 0
@@ -532,7 +549,7 @@ target_link_options(index PRIVATE
         encoding="utf-8",
     )
 
-    write_lvgl_ui_conf(web_project / "lv_conf.h")
+    write_lvgl_ui_conf(web_project / "lv_conf.h", entry_call)
     write_lvgl_ui_main(src_dir / "main.c", entry_call, entry_header)
 
     return web_project
@@ -1463,6 +1480,21 @@ def lvgl_tools_home() -> FileResponse:
     return ui_file("pages/lvgl.html")
 
 
+@app.get("/tools/lvgl/build")
+def lvgl_tools_build() -> FileResponse:
+    return ui_file("pages/lvgl-build.html")
+
+
+@app.get("/tools/lvgl/preview")
+def lvgl_tools_preview() -> FileResponse:
+    return ui_file("pages/lvgl-preview.html")
+
+
+@app.get("/tools/lvgl/jobs")
+def lvgl_tools_jobs() -> FileResponse:
+    return ui_file("pages/lvgl-jobs.html")
+
+
 @app.get("/ui")
 def legacy_ui_home() -> RedirectResponse:
     return RedirectResponse(url="/tools/esp")
@@ -1985,9 +2017,11 @@ def list_jobs():
 
     for path in sorted(JOB_DIR.glob("*.json"), reverse=True):
         try:
-            jobs.append(json.loads(path.read_text(encoding="utf-8")))
+            job = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             continue
+        if build_record_group(job) == "esp_firmware":
+            jobs.append(job)
 
     return jobs[:MAX_BUILD_RECORDS]
 

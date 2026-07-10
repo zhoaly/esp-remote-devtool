@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LVGL Preview - ZLYHUB</title>
+    <link rel="stylesheet" href="/static/css/common.css?v=lvgl-pages-20260710">
+</head>
+<body>
+    <div class="shell">
+        <nav class="top-nav"></nav>
+
+        <section class="hero">
+            <div class="eyebrow">LVGL Preview</div>
+            <h1>Choose a simulator build.</h1>
+            <div class="hero-copy">
+                Select any retained successful LVGL WebAssembly build and load its browser preview.
+            </div>
+            <div class="hero-grid">
+                <div class="stat">
+                    <div class="stat-label">Selected Job</div>
+                    <div class="stat-value" id="lvglPreviewJobCard">none</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Canvas Size</div>
+                    <div class="stat-value" id="lvglPreviewSize">-</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Remote Host</div>
+                    <div class="stat-value" id="remoteHostCard"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <h2>1. Select Build</h2>
+                <button class="secondary compact-button" type="button" onclick="loadLvglPreviewJobs()">Refresh Builds</button>
+            </div>
+            <div id="lvglPreviewJobsList" class="compact-list">
+                <div class="empty-state">Loading LVGL preview builds...</div>
+            </div>
+        </section>
+
+        <section class="logs lvgl-workbench">
+            <div class="panel">
+                <div class="panel-heading">
+                    <h2>2. Preview</h2>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <span class="tag" id="lvglPreviewLiveBadge" style="display:none">Live</span>
+                    </div>
+                </div>
+                <div class="preview-frame-wrap loading" id="lvglPreviewWrap">
+                    <iframe id="lvglPreviewFrame" title="LVGL UI Preview"></iframe>
+                    <div class="preview-empty" id="lvglPreviewEmpty">Select a successful LVGL build to preview it here.</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>3. Actions</h2>
+                <div id="lvglPreviewStatusBox" class="status">Select a build to preview.</div>
+                <div class="links">
+                    <a id="lvglOpenPreviewLink" class="disabled" href="#" target="_blank">Open full preview</a>
+                    <a id="lvglOpenLogLink" class="disabled" href="#" target="_blank">Open log</a>
+                    <a id="lvglDownloadLink" class="disabled" href="#" target="_blank">Download package</a>
+                    <a href="#" onclick="reloadLvglPreview(); return false;">Refresh iframe</a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/js/common.js?v=lvgl-pages-20260710"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/lvgl-common.js?v=lvgl-pages-20260710"></script>
+    <script src="/static/js/lvgl-preview.js?v=lvgl-pages-20260710"></script>
+</body>
+</html>
