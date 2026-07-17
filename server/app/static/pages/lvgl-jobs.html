@@ -14,30 +14,30 @@
             <div class="eyebrow">LVGL Jobs</div>
             <h1>Build history.</h1>
             <div class="hero-copy">
-                Shows the retained LVGL simulator builds. Older records are pruned server-side using the configured build record limit.
+                显示服务器当前保留的 LVGL 模拟器构建记录。较早记录会按配置的构建记录上限在服务器端清理。
             </div>
         </section>
 
         <section class="panel table-wrap">
             <div class="panel-heading">
                 <h2>LVGL Build History</h2>
-                <button class="secondary compact-button" type="button" onclick="loadLvglJobs()">Refresh</button>
+                <button class="secondary compact-button" type="button" onclick="loadLvglJobs()">刷新</button>
             </div>
             <table>
                 <thead>
                     <tr>
                         <th>Job ID</th>
-                        <th>Status</th>
-                        <th>Project</th>
-                        <th>Size</th>
-                        <th>Source</th>
-                        <th>Created</th>
-                        <th>Finished</th>
-                        <th>Links</th>
+                        <th>状态</th>
+                        <th>工程</th>
+                        <th>尺寸</th>
+                        <th>来源</th>
+                        <th>创建时间</th>
+                        <th>完成时间</th>
+                        <th>链接</th>
                     </tr>
                 </thead>
                 <tbody id="lvglJobsBody">
-                    <tr><td colspan="8">Loading...</td></tr>
+                    <tr><td colspan="8">加载中...</td></tr>
                 </tbody>
             </table>
         </section>

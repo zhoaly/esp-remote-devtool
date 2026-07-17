@@ -17,6 +17,7 @@ function setLvglPreview(previewUrl) {
     const liveBadge = document.getElementById("lvglPreviewLiveBadge");
 
     if (!currentLvglPreviewUrl) {
+        setLvglPreviewDimensions();
         frame.removeAttribute("src");
         empty.style.display = "grid";
         wrap.classList.remove("loading");
@@ -37,9 +38,19 @@ function setLvglPreview(previewUrl) {
     };
 }
 
+function setLvglPreviewDimensions(job) {
+    const wrap = document.getElementById("lvglPreviewWrap");
+    if (!wrap) return;
+
+    const width = Number.parseInt(job?.width, 10);
+    const height = Number.parseInt(job?.height, 10);
+    wrap.style.setProperty("--lvgl-preview-width", String(Number.isFinite(width) && width >= 120 ? width : 128));
+    wrap.style.setProperty("--lvgl-preview-height", String(Number.isFinite(height) && height >= 120 ? height : 296));
+}
+
 function reloadLvglPreview() {
     if (!currentLvglPreviewUrl) {
-        setLvglPreviewStatus("Select a successful build before refreshing preview.", "failed");
+        setLvglPreviewStatus("请先选择一个成功的构建，再刷新预览。", "failed");
         return;
     }
     setLvglPreview(currentLvglPreviewUrl.replace(REMOTE_BASE, ""));
@@ -51,16 +62,17 @@ function selectLvglPreviewJob(jobId) {
 
     currentJobId = job.job_id;
     currentJob = job;
+    setLvglPreviewDimensions(job);
     setLvglPreview(job.preview_url);
     renderLvglPreviewJobs();
 
     setText("lvglPreviewJobCard", job.job_id);
     setText("lvglPreviewSize", lvglJobDimensions(job));
     setLvglPreviewStatus([
-        `Selected build: ${job.job_id}`,
-        `Project: ${job.project_name || "-"}`,
-        `Size: ${lvglJobDimensions(job)}`,
-        `Created: ${job.created_at || "-"}`
+        `已选择构建: ${job.job_id}`,
+        `工程: ${job.project_name || "-"}`,
+        `尺寸: ${lvglJobDimensions(job)}`,
+        `创建时间: ${job.created_at || "-"}`
     ].join("\n"), "success");
 
     const openLink = document.getElementById("lvglOpenPreviewLink");
@@ -90,7 +102,7 @@ function renderLvglPreviewJobs() {
         currentJob = null;
         currentLvglPreviewUrl = null;
         setLvglPreview(null);
-        list.innerHTML = '<div class="empty-state">No successful LVGL preview builds yet.</div>';
+        list.innerHTML = '<div class="empty-state">暂无成功的 LVGL 预览构建。</div>';
         return;
     }
 
@@ -105,7 +117,7 @@ function renderLvglPreviewJobs() {
                 </span>
                 <span class="row-meta">
                     <span>${lvglEscapeHtml(downloadName)}</span>
-                    <span class="tag success">Preview ready</span>
+                    <span class="tag success">可预览</span>
                 </span>
             </button>
         `;
@@ -114,7 +126,7 @@ function renderLvglPreviewJobs() {
 
 async function loadLvglPreviewJobs() {
     const list = document.getElementById("lvglPreviewJobsList");
-    if (list) list.innerHTML = '<div class="empty-state">Loading LVGL preview builds...</div>';
+    if (list) list.innerHTML = '<div class="empty-state">正在加载 LVGL 预览构建...</div>';
 
     try {
         lvglPreviewJobs = (await apiGet("/api/lvgl/jobs")).filter(isLvglPreviewJob);
@@ -127,8 +139,8 @@ async function loadLvglPreviewJobs() {
             selectLvglPreviewJob(defaultJob.job_id);
         }
     } catch (err) {
-        if (list) list.innerHTML = `<div class="empty-state failed">Failed to load LVGL builds: ${lvglEscapeHtml(err.message)}</div>`;
-        setLvglPreviewStatus(`Failed to load LVGL builds\n${err.message}`, "failed");
+        if (list) list.innerHTML = `<div class="empty-state failed">加载 LVGL 构建失败：${lvglEscapeHtml(err.message)}</div>`;
+        setLvglPreviewStatus(`加载 LVGL 构建失败\n${err.message}`, "failed");
     }
 }
 

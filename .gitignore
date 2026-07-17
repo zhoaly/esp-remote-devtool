@@ -48,6 +48,9 @@ release/*
 *.map
 *.zip
 *.tar.gz
+
+# Playwright test artifacts
+.playwright-cli/
 *.7z
 
 # Logs

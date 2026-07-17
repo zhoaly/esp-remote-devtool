@@ -14,7 +14,8 @@ function isLvglPreviewJob(job) {
 function lvglStatusBadge(job) {
     const status = job?.status || "?";
     const cls = status === "success" ? "tag success" : status === "failed" ? "tag failed" : "tag";
-    return `<span class="${cls}">${lvglEscapeHtml(status)}</span>`;
+    const label = status === "success" ? "成功" : status === "failed" ? "失败" : status;
+    return `<span class="${cls}">${lvglEscapeHtml(label)}</span>`;
 }
 
 function lvglJobDimensions(job) {
@@ -34,12 +35,20 @@ function stripEmscriptenChrome(frame) {
             #emscripten_logo { display: none !important; }
             #controls       { display: none !important; }
             #output         { display: none !important; }
-            body            { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+            #status         { display: none !important; }
+            #progress       { display: none !important; }
+            .spinner        { display: none !important; }
+            html, body      { width: 100%; height: 100%; margin: 0; padding: 0; background: transparent; overflow: hidden; }
             .emscripten_border {
                 border: none !important;
-                display: flex !important;
-                align-items: center;
-                justify-content: center;
+                width: 100% !important;
+                height: 100% !important;
+                display: block !important;
+            }
+            canvas.emscripten {
+                display: block !important;
+                width: 100% !important;
+                height: 100% !important;
             }
         `;
         doc.head.appendChild(style);

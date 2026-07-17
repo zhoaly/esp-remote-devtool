@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LVGL Preview - ZLYHUB</title>
-    <link rel="stylesheet" href="/static/css/common.css?v=lvgl-pages-20260710">
+    <link rel="stylesheet" href="/static/css/common.css?v=lvgl-preview-device-20260710">
 </head>
 <body>
     <div class="shell">
@@ -14,19 +14,19 @@
             <div class="eyebrow">LVGL Preview</div>
             <h1>Choose a simulator build.</h1>
             <div class="hero-copy">
-                Select any retained successful LVGL WebAssembly build and load its browser preview.
+                选择任意已保留且构建成功的 LVGL WebAssembly 任务，并加载对应的浏览器预览。
             </div>
             <div class="hero-grid">
                 <div class="stat">
-                    <div class="stat-label">Selected Job</div>
-                    <div class="stat-value" id="lvglPreviewJobCard">none</div>
+                    <div class="stat-label">已选任务</div>
+                    <div class="stat-value" id="lvglPreviewJobCard">无</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-label">Canvas Size</div>
+                    <div class="stat-label">画布尺寸</div>
                     <div class="stat-value" id="lvglPreviewSize">-</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-label">Remote Host</div>
+                    <div class="stat-label">远端主机</div>
                     <div class="stat-value" id="remoteHostCard"></div>
                 </div>
             </div>
@@ -35,10 +35,10 @@
         <section class="panel">
             <div class="panel-heading">
                 <h2>1. Select Build</h2>
-                <button class="secondary compact-button" type="button" onclick="loadLvglPreviewJobs()">Refresh Builds</button>
+                <button class="secondary compact-button" type="button" onclick="loadLvglPreviewJobs()">刷新构建</button>
             </div>
             <div id="lvglPreviewJobsList" class="compact-list">
-                <div class="empty-state">Loading LVGL preview builds...</div>
+                <div class="empty-state">正在加载 LVGL 预览构建...</div>
             </div>
         </section>
 
@@ -47,23 +47,23 @@
                 <div class="panel-heading">
                     <h2>2. Preview</h2>
                     <div style="display:flex;align-items:center;gap:8px">
-                        <span class="tag" id="lvglPreviewLiveBadge" style="display:none">Live</span>
+                        <span class="tag" id="lvglPreviewLiveBadge" style="display:none">运行中</span>
                     </div>
                 </div>
                 <div class="preview-frame-wrap loading" id="lvglPreviewWrap">
                     <iframe id="lvglPreviewFrame" title="LVGL UI Preview"></iframe>
-                    <div class="preview-empty" id="lvglPreviewEmpty">Select a successful LVGL build to preview it here.</div>
+                    <div class="preview-empty" id="lvglPreviewEmpty">请选择一个成功的 LVGL 构建在此预览。</div>
                 </div>
             </div>
 
             <div class="panel">
                 <h2>3. Actions</h2>
-                <div id="lvglPreviewStatusBox" class="status">Select a build to preview.</div>
+                <div id="lvglPreviewStatusBox" class="status">请选择一个构建进行预览。</div>
                 <div class="links">
-                    <a id="lvglOpenPreviewLink" class="disabled" href="#" target="_blank">Open full preview</a>
-                    <a id="lvglOpenLogLink" class="disabled" href="#" target="_blank">Open log</a>
-                    <a id="lvglDownloadLink" class="disabled" href="#" target="_blank">Download package</a>
-                    <a href="#" onclick="reloadLvglPreview(); return false;">Refresh iframe</a>
+                    <a id="lvglOpenPreviewLink" class="disabled" href="#" target="_blank">打开完整预览</a>
+                    <a id="lvglOpenLogLink" class="disabled" href="#" target="_blank">打开日志</a>
+                    <a id="lvglDownloadLink" class="disabled" href="#" target="_blank">下载产物包</a>
+                    <a href="#" onclick="reloadLvglPreview(); return false;">刷新预览窗口</a>
                 </div>
             </div>
         </section>
@@ -71,7 +71,7 @@
 
     <script src="/static/js/common.js?v=lvgl-pages-20260710"></script>
     <script src="/static/js/api.js"></script>
-    <script src="/static/js/lvgl-common.js?v=lvgl-pages-20260710"></script>
-    <script src="/static/js/lvgl-preview.js?v=lvgl-pages-20260710"></script>
+    <script src="/static/js/lvgl-common.js?v=lvgl-preview-fill-2-20260710"></script>
+    <script src="/static/js/lvgl-preview.js?v=lvgl-preview-device-20260710"></script>
 </body>
 </html>

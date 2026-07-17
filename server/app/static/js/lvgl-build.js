@@ -7,7 +7,7 @@ function lvglSetStatus(text, type = "") {
 function lvglDimension(id, fallback) {
     const value = parseInt(document.getElementById(id)?.value || String(fallback), 10);
     if (!Number.isFinite(value) || value < 120 || value > 4096) {
-        throw new Error("Preview dimensions must be between 120 and 4096.");
+        throw new Error("预览尺寸必须在 120 到 4096 之间。");
     }
     return value;
 }
@@ -34,7 +34,7 @@ function handleLvglSourceModeChange() {
 
 function handleLvglLocalBuildModeChange() {
     const sourceMode = document.getElementById("lvglSourceMode")?.value || "local_path";
-    const localMode = document.getElementById("lvglLocalBuildMode")?.value || "ui_package";
+    const localMode = document.getElementById("lvglLocalBuildMode")?.value || "full_project";
     const showUiFields = sourceMode !== "remote_workspace" && localMode === "ui_package";
     document.querySelectorAll(".lvgl-ui-field").forEach((field) => {
         field.style.display = showUiFields ? "grid" : "none";
@@ -51,8 +51,8 @@ function splitCsv(value) {
 function applyLvglWorkspaceDefaults(workspace) {
     if (!workspace) return;
     document.getElementById("lvglProjectName").value = workspace.project_name || workspace.workspace_id || "lvgl_project";
-    document.getElementById("lvglWidth").value = workspace.width || 480;
-    document.getElementById("lvglHeight").value = workspace.height || 480;
+    document.getElementById("lvglWidth").value = workspace.width || 128;
+    document.getElementById("lvglHeight").value = workspace.height || 296;
     document.getElementById("lvglVersion").value = workspace.lvgl_version || "9.x";
 }
 
@@ -64,9 +64,9 @@ function renderLvglWorkspaces(workspaces) {
     if (!workspaces.length) {
         const opt = document.createElement("option");
         opt.value = "";
-        opt.textContent = "No LVGL workspaces configured";
+        opt.textContent = "尚未配置 LVGL 工作区";
         select.appendChild(opt);
-        hint.textContent = "Add project_type lvgl or lvgl_simulator entries in server/config/workspaces.json.";
+        hint.textContent = "请在 server/config/workspaces.json 中添加 project_type 为 lvgl 或 lvgl_simulator 的条目。";
         if (typeof refreshCustomSelect === "function") refreshCustomSelect(select);
         return;
     }
@@ -74,13 +74,15 @@ function renderLvglWorkspaces(workspaces) {
     workspaces.forEach((workspace) => {
         const opt = document.createElement("option");
         opt.value = workspace.workspace_id;
-        opt.textContent = `${workspace.display_name || workspace.workspace_id} (${workspace.width || 480}x${workspace.height || 480})`;
+        opt.textContent = `${workspace.display_name || workspace.workspace_id} (${workspace.width || 128}x${workspace.height || 296})`;
         select.appendChild(opt);
     });
 
     select.onchange = () => applyLvglWorkspaceDefaults(selectedLvglWorkspace());
-    hint.textContent = "Remote workspace builds use server-side allowlisted paths only.";
-    applyLvglWorkspaceDefaults(workspaces[0]);
+    hint.textContent = "远端工作区构建只能使用服务器白名单中的路径。";
+    if (document.getElementById("lvglSourceMode")?.value === "remote_workspace") {
+        applyLvglWorkspaceDefaults(workspaces[0]);
+    }
     if (typeof refreshCustomSelect === "function") refreshCustomSelect(select);
 }
 
@@ -91,14 +93,14 @@ async function loadLvglWorkspaces() {
         const widthInput = document.getElementById("lvglWidth");
         const heightInput = document.getElementById("lvglHeight");
         const versionInput = document.getElementById("lvglVersion");
-        if (!widthInput.value) widthInput.value = data.default_width || 480;
-        if (!heightInput.value) heightInput.value = data.default_height || 480;
+        if (!widthInput.value) widthInput.value = data.default_width || 128;
+        if (!heightInput.value) heightInput.value = data.default_height || 296;
         if (!versionInput.value) versionInput.value = data.default_lvgl_version || "9.x";
         renderLvglWorkspaces(lvglWorkspaces);
     } catch (err) {
         lvglWorkspaces = [];
         renderLvglWorkspaces([]);
-        document.getElementById("lvglRemoteWorkspaceHint").textContent = `Failed to load LVGL workspaces: ${err.message}`;
+        document.getElementById("lvglRemoteWorkspaceHint").textContent = `加载 LVGL 工作区失败：${err.message}`;
     }
 }
 
@@ -110,7 +112,7 @@ function setLvglLinks(job) {
     if (job?.preview_url) {
         const preview = document.createElement("a");
         preview.href = lvglPreviewPageUrl(job.job_id);
-        preview.textContent = "Open in preview page";
+        preview.textContent = "在预览页面打开";
         area.appendChild(preview);
     }
 
@@ -118,7 +120,7 @@ function setLvglLinks(job) {
         const artifact = document.createElement("a");
         artifact.href = REMOTE_BASE + (job.artifact_url || job.download_url);
         artifact.target = "_blank";
-        artifact.textContent = "Download preview package";
+        artifact.textContent = "下载预览产物包";
         area.appendChild(artifact);
     }
 
@@ -126,7 +128,7 @@ function setLvglLinks(job) {
         const log = document.createElement("a");
         log.href = REMOTE_BASE + job.log_url;
         log.target = "_blank";
-        log.textContent = "Open full log";
+        log.textContent = "打开完整日志";
         area.appendChild(log);
     }
 }
@@ -140,17 +142,17 @@ async function startLvglBuild() {
     currentJobId = null;
     currentJob = null;
     setLvglLinks(null);
-    setText("lvglJobIdCard", "starting");
+    setText("lvglJobIdCard", "启动中");
 
     try {
-        const width = lvglDimension("lvglWidth", 480);
-        const height = lvglDimension("lvglHeight", 480);
+        const width = lvglDimension("lvglWidth", 128);
+        const height = lvglDimension("lvglHeight", 296);
 
         let data;
         if (sourceMode === "remote_workspace") {
             const workspaceId = document.getElementById("lvglRemoteWorkspace").value;
-            if (!workspaceId) throw new Error("Select an available LVGL remote workspace.");
-            lvglSetStatus("Requesting remote workspace build...");
+            if (!workspaceId) throw new Error("请选择一个可用的 LVGL 远端工作区。");
+            lvglSetStatus("正在请求远端工作区构建...");
             data = await apiPostJson("/api/lvgl/build/workspace", {
                 workspace_id: workspaceId,
                 project_name: document.getElementById("lvglProjectName").value.trim(),
@@ -159,13 +161,13 @@ async function startLvglBuild() {
             });
         } else {
             const projectPath = document.getElementById("lvglProjectPath").value.trim();
-            if (!projectPath) throw new Error("Enter a Windows local LVGL project path.");
+            if (!projectPath) throw new Error("请输入 Windows 本地 LVGL 工程路径。");
             const localMode = document.getElementById("lvglLocalBuildMode").value;
             const projectName = document.getElementById("lvglProjectName").value.trim() || "lvgl_project";
             let agentResp;
 
             if (localMode === "ui_package") {
-                lvglSetStatus("Asking Local Agent to upload LVGL UI sources...");
+                lvglSetStatus("正在请求 Local Agent 上传 LVGL UI 源码...");
                 agentResp = await localAgentPostJson("/api/lvgl/build_ui_from_path", {
                     project_path: projectPath,
                     project_name: projectName,
@@ -177,7 +179,7 @@ async function startLvglBuild() {
                     entry_call: document.getElementById("lvglEntryCall").value.trim() || "ui_init",
                 });
             } else {
-                lvglSetStatus("Asking Local Agent to upload the full LVGL web project...");
+                lvglSetStatus("正在请求 Local Agent 上传完整 LVGL Web 工程...");
                 agentResp = await localAgentPostJson("/api/lvgl/build_from_path", {
                     project_path: projectPath,
                     project_name: projectName,
@@ -189,15 +191,15 @@ async function startLvglBuild() {
         }
 
         currentJobId = data.job_id;
-        if (!currentJobId) throw new Error("Remote build API did not return job_id.");
+        if (!currentJobId) throw new Error("远端构建 API 未返回 job_id。");
 
         setText("lvglJobIdCard", currentJobId);
-        lvglSetStatus(`LVGL build started\nJob ID: ${currentJobId}`);
+        lvglSetStatus(`LVGL 构建已启动\nJob ID: ${currentJobId}`);
         await pollLvglJob();
         pollTimer = setInterval(pollLvglJob, 3000);
     } catch (err) {
-        lvglSetStatus(`Failed to start LVGL build\n${err.message}`, "failed");
-        setText("lvglJobIdCard", "error");
+        lvglSetStatus(`启动 LVGL 构建失败\n${err.message}`, "failed");
+        setText("lvglJobIdCard", "错误");
         startBtn.disabled = false;
     }
 }
@@ -211,11 +213,11 @@ async function pollLvglJob() {
         setText("lvglJobIdCard", job.job_id);
         lvglSetStatus([
             `Job ID: ${job.job_id}`,
-            `Status: ${job.status}`,
-            `Message: ${job.message || "-"}`,
-            `Project: ${job.project_name || "-"}`,
-            `Size: ${job.width || "-"} x ${job.height || "-"}`,
-            `Source: ${job.source_mode || "-"}`
+            `状态: ${job.status}`,
+            `消息: ${job.message || "-"}`,
+            `工程: ${job.project_name || "-"}`,
+            `尺寸: ${job.width || "-"} x ${job.height || "-"}`,
+            `来源: ${job.source_mode || "-"}`
         ].join("\n"), job.status === "success" ? "success" : job.status === "failed" ? "failed" : "");
 
         await refreshLvglLog();
@@ -226,7 +228,7 @@ async function pollLvglJob() {
             document.getElementById("lvglStartBtn").disabled = false;
         }
     } catch (err) {
-        lvglSetStatus(`Failed to poll LVGL build status\n${err.message}`, "failed");
+        lvglSetStatus(`轮询 LVGL 构建状态失败\n${err.message}`, "failed");
         document.getElementById("lvglStartBtn").disabled = false;
     }
 }
@@ -237,7 +239,7 @@ async function refreshLvglLog() {
     try {
         const text = await apiGetText("/api/lvgl/logs/" + currentJobId);
         const box = document.getElementById("lvglLogBox");
-        box.textContent = text || "No build log yet.";
+        box.textContent = text || "暂无构建日志。";
         box.scrollTop = box.scrollHeight;
     } catch {
     }
