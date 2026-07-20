@@ -1,0 +1,16 @@
+name: esp-remote-https
+
+services:
+  caddy:
+    image: caddy:2.11.4-alpine
+    container_name: esp-remote-caddy
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

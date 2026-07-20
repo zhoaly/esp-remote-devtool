@@ -738,7 +738,8 @@ th { color: #fed7aa; font-size: 13px; }
     width: 100%;
 }
 #otaJobsList,
-#flashJobsList {
+#flashJobsList,
+#lvglPreviewJobsList {
     max-height: 430px;
     overflow-y: auto;
     padding-right: 6px;
@@ -747,24 +748,33 @@ th { color: #fed7aa; font-size: 13px; }
     scrollbar-width: thin;
 }
 #otaJobsList::-webkit-scrollbar,
-#flashJobsList::-webkit-scrollbar {
+#flashJobsList::-webkit-scrollbar,
+#lvglPreviewJobsList::-webkit-scrollbar {
     width: 10px;
 }
 #otaJobsList::-webkit-scrollbar-track,
-#flashJobsList::-webkit-scrollbar-track {
+#flashJobsList::-webkit-scrollbar-track,
+#lvglPreviewJobsList::-webkit-scrollbar-track {
     border-radius: 999px;
     background: rgba(15, 23, 42, 0.68);
     border: 1px solid rgba(148, 163, 184, 0.14);
 }
 #otaJobsList::-webkit-scrollbar-thumb,
-#flashJobsList::-webkit-scrollbar-thumb {
+#flashJobsList::-webkit-scrollbar-thumb,
+#lvglPreviewJobsList::-webkit-scrollbar-thumb {
     border-radius: 999px;
     background: linear-gradient(180deg, rgba(251, 146, 60, 0.88), rgba(249, 115, 22, 0.58));
     border: 2px solid rgba(15, 23, 42, 0.88);
 }
 #otaJobsList::-webkit-scrollbar-thumb:hover,
-#flashJobsList::-webkit-scrollbar-thumb:hover {
+#flashJobsList::-webkit-scrollbar-thumb:hover,
+#lvglPreviewJobsList::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(180deg, rgba(253, 186, 116, 0.95), rgba(249, 115, 22, 0.76));
+}
+#lvglPreviewJobsList {
+    --lvgl-build-row-height: 112px;
+    grid-auto-rows: var(--lvgl-build-row-height);
+    max-height: calc(3 * var(--lvgl-build-row-height) + 2 * 10px);
 }
 #otaJobsList .empty-state,
 #flashJobsList .empty-state,

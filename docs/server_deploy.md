@@ -27,3 +27,17 @@ point to `/api/ota/latest?...`, and the manifest JSON returned by that endpoint
 contains a `url` field pointing to `/api/ota/firmware/<release>/app.bin`.
 
 Runtime data is stored under `server/data/` and is intentionally excluded from Git.
+
+## HTTPS reverse proxy
+
+The included Caddy deployment terminates HTTPS for `zlyhub.top` and proxies to
+the existing application on `127.0.0.1:8000`. The domain's A or AAAA record must
+point to the server, and public ports 80 and 443 must reach the server.
+
+```bash
+cd server
+docker compose -f compose.https.yaml up -d
+```
+
+Caddy stores certificates in persistent Docker volumes and automatically
+redirects HTTP requests to HTTPS.
