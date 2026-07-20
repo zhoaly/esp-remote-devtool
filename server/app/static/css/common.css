@@ -835,6 +835,22 @@ th { color: #fed7aa; font-size: 13px; }
     min-width: 0;
     overflow-wrap: anywhere;
 }
+#lvglPreviewJobsList .list-row {
+    gap: 8px;
+    overflow: hidden;
+}
+#lvglPreviewJobsList .list-row strong,
+#lvglPreviewJobsList .list-row small,
+#lvglPreviewJobsList .row-meta > span:not(.tag) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#lvglPreviewJobsList .row-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    flex-wrap: nowrap;
+}
 .tag {
     display: inline-flex;
     align-items: center;
