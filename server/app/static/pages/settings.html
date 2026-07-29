@@ -1,1 +1,179 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Settings - ESP Toolset</title><link rel="stylesheet" href="/static/css/common.css?v=nav-registry-20260709"></head><body><div class="shell"><nav class="top-nav"><a href="/home">HOME</a><a href="/tools/esp">ESP工具集</a><a href="/tools/esp/build">远端编译</a><a href="/tools/esp/flash">本地烧录</a><a href="/tools/esp/ota">OTA 发布</a><a href="/tools/esp/jobs">构建历史</a><a href="/tools/esp/settings" class="active">设置</a></nav><section class="hero"><div class="eyebrow">Settings</div><h1>Read-only settings.</h1><div class="hero-copy">先提供只读配置概览，后续再扩展为可编辑配置页面。</div></section><section class="panel"><div class="grid"><div class="stat"><div class="stat-label">默认项目名</div><div class="stat-value" id="defaultProject">-</div></div><div class="stat"><div class="stat-label">默认 Target</div><div class="stat-value" id="defaultTarget">-</div></div><div class="stat"><div class="stat-label">默认 IDF 镜像</div><div class="stat-value" id="defaultIdfImage">-</div></div><div class="stat"><div class="stat-label">Server 地址</div><div class="stat-value" id="serverUrl">-</div></div><div class="stat"><div class="stat-label">Local Agent</div><div class="stat-value" id="agentUrl">-</div></div></div><div id="settingsError" class="hint"></div></section><section class="panel"><h2>远端工作区列表</h2><div id="workspaceList" class="log-box">加载中...</div></section></div><script src="/static/js/common.js?v=nav-registry-20260709"></script><script src="/static/js/api.js"></script><script src="/static/js/settings.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - ESP Toolset</title>
+    <link rel="stylesheet" href="/static/css/common.css?v=esp-settings-20260720">
+</head>
+<body>
+    <div class="shell">
+        <nav class="top-nav">
+            <a href="/home">HOME</a>
+            <a href="/tools/esp">ESP工具集</a>
+            <a href="/tools/esp/build">远端编译</a>
+            <a href="/tools/esp/flash">本地烧录</a>
+            <a href="/tools/esp/ota">OTA 发布</a>
+            <a href="/tools/esp/jobs">构建历史</a>
+            <a href="/tools/esp/settings" class="active">设置</a>
+        </nav>
+
+        <section class="hero">
+            <div class="eyebrow">ESP Settings</div>
+            <h1>Default values.</h1>
+            <div class="hero-copy">
+                配置 ESP 各功能页面打开时的默认填充值。设置保存在当前浏览器中，不会修改服务器环境变量或其他设备上的设置。
+            </div>
+            <div class="hero-grid">
+                <div class="stat">
+                    <div class="stat-label">Remote Host</div>
+                    <div class="stat-value" id="serverUrl">-</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Local Agent</div>
+                    <div class="stat-value" id="agentUrl">-</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Storage</div>
+                    <div class="stat-value">当前浏览器</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel settings-panel">
+            <div class="panel-heading">
+                <div>
+                    <div class="settings-kicker">Remote Compile</div>
+                    <h2>远端编译默认值</h2>
+                </div>
+                <a class="settings-page-link" href="/tools/esp/build">打开页面 →</a>
+            </div>
+            <div class="grid">
+                <div class="field">
+                    <label for="settingBuildSourceMode">源码来源</label>
+                    <select id="settingBuildSourceMode" onchange="handleSettingsSourceModeChange()">
+                        <option value="upload_zip">本地上传构建</option>
+                        <option value="remote_workspace">远端固定工作区构建</option>
+                    </select>
+                </div>
+                <div class="field" id="settingRemoteWorkspaceField">
+                    <label for="settingRemoteWorkspace">远端工作区</label>
+                    <select id="settingRemoteWorkspace">
+                        <option value="">自动选择第一个可用工作区</option>
+                    </select>
+                </div>
+                <div class="field full">
+                    <label for="settingProjectPath">Windows 本地工程路径</label>
+                    <input id="settingProjectPath" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="settingProjectName">项目名</label>
+                    <input id="settingProjectName" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="settingTarget">目标芯片</label>
+                    <select id="settingTarget">
+                        <option value="esp32s3">esp32s3</option>
+                        <option value="esp32">esp32</option>
+                        <option value="esp32c3">esp32c3</option>
+                        <option value="esp32c6">esp32c6</option>
+                        <option value="esp32s2">esp32s2</option>
+                    </select>
+                </div>
+                <div class="field full">
+                    <label for="settingIdfImage">ESP-IDF 版本</label>
+                    <select id="settingIdfImage" onchange="handleSettingsIdfImageChange()">
+                        <option value="">正在加载可用版本...</option>
+                    </select>
+                    <input id="settingIdfImageCustom" autocomplete="off" placeholder="例如 espressif/idf:v6.0.2" style="display: none; margin-top: 10px;">
+                    <div class="hint">版本列表由远端服务器提供；服务器允许时也可填写自定义 Docker 镜像。</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel settings-panel">
+            <div class="panel-heading">
+                <div>
+                    <div class="settings-kicker">Local Flash</div>
+                    <h2>本地烧录默认值</h2>
+                </div>
+                <a class="settings-page-link" href="/tools/esp/flash">打开页面 →</a>
+            </div>
+            <div class="grid">
+                <div class="field full">
+                    <label for="settingSerialPort">首选串口</label>
+                    <input id="settingSerialPort" autocomplete="off" placeholder="留空时使用 Local Agent 推荐串口，例如 COM5">
+                    <div class="hint">只有刷新串口后仍然存在的首选串口才会被选中，否则自动回退到 Local Agent 推荐项。</div>
+                </div>
+                <div class="field">
+                    <label for="settingFlashBaud">烧录波特率</label>
+                    <input id="settingFlashBaud" type="number" min="9600" max="3000000" step="1">
+                </div>
+                <div class="field">
+                    <label for="settingFlashChip">芯片型号</label>
+                    <input id="settingFlashChip" autocomplete="off" placeholder="例如 esp32s3">
+                </div>
+            </div>
+        </section>
+
+        <section class="panel settings-panel">
+            <div class="panel-heading">
+                <div>
+                    <div class="settings-kicker">OTA Release</div>
+                    <h2>OTA 发布默认值</h2>
+                </div>
+                <a class="settings-page-link" href="/tools/esp/ota">打开页面 →</a>
+            </div>
+            <div class="grid">
+                <div class="field">
+                    <label for="settingOtaChannel">Channel</label>
+                    <select id="settingOtaChannel" onchange="handleSettingsOtaChannelChange()">
+                        <option value="test">test</option>
+                        <option value="stable">stable</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="field" id="settingOtaCustomChannelField">
+                    <label for="settingOtaCustomChannel">Custom Channel</label>
+                    <input id="settingOtaCustomChannel" autocomplete="off" placeholder="例如 beta">
+                </div>
+                <div class="field">
+                    <label for="settingOtaVersion">Version</label>
+                    <input id="settingOtaVersion" autocomplete="off" placeholder="留空时使用所选构建的版本">
+                </div>
+                <div class="field">
+                    <label for="settingOtaMinVersion">Min Version</label>
+                    <input id="settingOtaMinVersion" autocomplete="off" placeholder="可留空，例如 0.1.0">
+                </div>
+                <div class="field">
+                    <label for="settingOtaForce">Force Update</label>
+                    <select id="settingOtaForce">
+                        <option value="false">false</option>
+                        <option value="true">true</option>
+                    </select>
+                </div>
+                <div class="field full">
+                    <label for="settingOtaReleaseNotes">Release Notes</label>
+                    <input id="settingOtaReleaseNotes" autocomplete="off" placeholder="可选发布说明">
+                </div>
+            </div>
+        </section>
+
+        <section class="panel settings-save-panel">
+            <div>
+                <h2>保存设置</h2>
+                <div class="hint">保存后重新打开对应页面即可使用新的默认填充值。</div>
+            </div>
+            <div class="actions">
+                <button class="primary" type="button" onclick="saveSettings()">保存默认值</button>
+                <button class="secondary" type="button" onclick="restoreFactoryDefaults()">恢复初始默认值</button>
+            </div>
+            <div id="settingsStatus" class="status settings-status">正在加载设置...</div>
+        </section>
+    </div>
+
+    <script src="/static/js/common.js?v=esp-settings-20260720"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/settings.js?v=esp-settings-20260720"></script>
+</body>
+</html>

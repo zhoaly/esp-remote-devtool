@@ -1,4 +1,5 @@
 let lvglWorkspaces = [];
+let lvglBuildDefaults = getLvglSettings().build;
 
 function lvglSetStatus(text, type = "") {
     setStatus("lvglStatusBox", text, type);
@@ -56,7 +57,7 @@ function applyLvglWorkspaceDefaults(workspace) {
     document.getElementById("lvglVersion").value = workspace.lvgl_version || "9.x";
 }
 
-function renderLvglWorkspaces(workspaces) {
+function renderLvglWorkspaces(workspaces, preferredWorkspace = "") {
     const select = document.getElementById("lvglRemoteWorkspace");
     const hint = document.getElementById("lvglRemoteWorkspaceHint");
     select.innerHTML = "";
@@ -78,15 +79,19 @@ function renderLvglWorkspaces(workspaces) {
         select.appendChild(opt);
     });
 
+    if (preferredWorkspace && workspaces.some((workspace) => workspace.workspace_id === preferredWorkspace)) {
+        select.value = preferredWorkspace;
+    }
+
     select.onchange = () => applyLvglWorkspaceDefaults(selectedLvglWorkspace());
     hint.textContent = "远端工作区构建只能使用服务器白名单中的路径。";
     if (document.getElementById("lvglSourceMode")?.value === "remote_workspace") {
-        applyLvglWorkspaceDefaults(workspaces[0]);
+        applyLvglWorkspaceDefaults(selectedLvglWorkspace());
     }
     if (typeof refreshCustomSelect === "function") refreshCustomSelect(select);
 }
 
-async function loadLvglWorkspaces() {
+async function loadLvglWorkspaces(preferredWorkspace = "") {
     try {
         const data = await apiGet("/api/lvgl/workspaces");
         lvglWorkspaces = data.workspaces || [];
@@ -95,8 +100,8 @@ async function loadLvglWorkspaces() {
         const versionInput = document.getElementById("lvglVersion");
         if (!widthInput.value) widthInput.value = data.default_width || 128;
         if (!heightInput.value) heightInput.value = data.default_height || 296;
-        if (!versionInput.value) versionInput.value = data.default_lvgl_version || "9.x";
-        renderLvglWorkspaces(lvglWorkspaces);
+        versionInput.value = data.default_lvgl_version || "9.x";
+        renderLvglWorkspaces(lvglWorkspaces, preferredWorkspace);
     } catch (err) {
         lvglWorkspaces = [];
         renderLvglWorkspaces([]);
@@ -247,7 +252,18 @@ async function refreshLvglLog() {
 
 document.addEventListener("DOMContentLoaded", () => {
     if (!document.getElementById("lvglSourceMode")) return;
-    loadLvglWorkspaces();
+    lvglBuildDefaults = getLvglSettings().build;
+    setFormValue("lvglSourceMode", lvglBuildDefaults.source_mode);
+    setFormValue("lvglLocalBuildMode", lvglBuildDefaults.local_build_mode);
+    setFormValue("lvglProjectPath", lvglBuildDefaults.project_path);
+    setFormValue("lvglUiRoots", lvglBuildDefaults.ui_roots);
+    setFormValue("lvglIncludeDirs", lvglBuildDefaults.include_dirs);
+    setFormValue("lvglEntryHeader", lvglBuildDefaults.entry_header);
+    setFormValue("lvglEntryCall", lvglBuildDefaults.entry_call);
+    setFormValue("lvglProjectName", lvglBuildDefaults.project_name);
+    setFormValue("lvglWidth", lvglBuildDefaults.width);
+    setFormValue("lvglHeight", lvglBuildDefaults.height);
     handleLvglSourceModeChange();
     handleLvglLocalBuildModeChange();
+    loadLvglWorkspaces(lvglBuildDefaults.remote_workspace);
 });

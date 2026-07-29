@@ -5,6 +5,7 @@ let otaJobs = [];
 let otaReleases = [];
 let currentManifestDirectUrl = null;
 let currentFirmwareUrl = null;
+let otaPageDefaults = getEspSettings().ota;
 
 function escapeHtml(value) {
     return String(value ?? "")
@@ -150,11 +151,6 @@ function selectOtaJob(jobId) {
     if (versionInput && !versionInput.value.trim()) {
         versionInput.value = normalizeOtaVersionForInput(job.project_version);
     }
-    const minVersionInput = document.getElementById("otaMinVersion");
-    if (minVersionInput && !minVersionInput.value.trim()) {
-        minVersionInput.value = "0.0.0";
-    }
-
     const publishBtn = document.getElementById("otaPublishBtn");
     if (publishBtn) publishBtn.disabled = !job.ota_publishable;
 
@@ -472,6 +468,13 @@ async function loadOtaReleases() {
 async function initOtaPage() {
     if (!isOtaPage()) return;
 
+    otaPageDefaults = getEspSettings().ota;
+    setFormValue("otaChannel", otaPageDefaults.channel);
+    setFormValue("otaCustomChannel", otaPageDefaults.custom_channel);
+    setFormValue("otaVersion", otaPageDefaults.version);
+    setFormValue("otaMinVersion", otaPageDefaults.min_version);
+    setFormValue("otaForce", otaPageDefaults.force);
+    setFormValue("otaReleaseNotes", otaPageDefaults.release_notes);
     handleOtaChannelChange();
     updateSelectedJobChrome();
     await loadOtaReleases();

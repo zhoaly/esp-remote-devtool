@@ -1,6 +1,119 @@
 const REMOTE_BASE = window.location.origin;
 const LOCAL_AGENT = "http://127.0.0.1:8765";
 
+const ESP_SETTINGS_STORAGE_KEY = "zlyhub.esp.defaults.v1";
+const ESP_FACTORY_DEFAULTS = Object.freeze({
+    build: Object.freeze({
+        source_mode: "upload_zip",
+        remote_workspace: "",
+        project_path: "C:\\Users\\13281\\OneDrive\\dev_projects\\embedded\\ESP32_S3_wifi_ble_hub",
+        project_name: "ESP32_S3_wifi_ble_hub",
+        target: "esp32s3",
+        idf_image: "espressif/idf:v6.0.1",
+    }),
+    flash: Object.freeze({
+        serial_port: "",
+        baud: "460800",
+        chip: "esp32s3",
+    }),
+    ota: Object.freeze({
+        channel: "test",
+        custom_channel: "",
+        version: "",
+        min_version: "0.0.0",
+        force: "false",
+        release_notes: "",
+    }),
+});
+
+function cloneEspFactoryDefaults() {
+    return {
+        build: { ...ESP_FACTORY_DEFAULTS.build },
+        flash: { ...ESP_FACTORY_DEFAULTS.flash },
+        ota: { ...ESP_FACTORY_DEFAULTS.ota },
+    };
+}
+
+function getEspSettings() {
+    const defaults = cloneEspFactoryDefaults();
+    try {
+        const stored = JSON.parse(window.localStorage.getItem(ESP_SETTINGS_STORAGE_KEY) || "null");
+        if (!stored || typeof stored !== "object" || Array.isArray(stored)) return defaults;
+
+        ["build", "flash", "ota"].forEach((section) => {
+            if (stored[section] && typeof stored[section] === "object" && !Array.isArray(stored[section])) {
+                defaults[section] = { ...defaults[section], ...stored[section] };
+            }
+        });
+    } catch {
+        return defaults;
+    }
+    return defaults;
+}
+
+function saveEspSettings(settings) {
+    window.localStorage.setItem(ESP_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function resetEspSettings() {
+    window.localStorage.removeItem(ESP_SETTINGS_STORAGE_KEY);
+    return cloneEspFactoryDefaults();
+}
+
+const LVGL_SETTINGS_STORAGE_KEY = "zlyhub.lvgl.defaults.v1";
+const LVGL_FACTORY_DEFAULTS = Object.freeze({
+    build: Object.freeze({
+        source_mode: "local_path",
+        remote_workspace: "",
+        local_build_mode: "full_project",
+        project_path: "C:\\Users\\13281\\OneDrive\\dev_projects\\LVGL_Web",
+        ui_roots: "",
+        include_dirs: "",
+        entry_header: "",
+        entry_call: "lv_demo_widgets",
+        project_name: "lv_port_pc_vscode",
+        width: "128",
+        height: "296",
+    }),
+});
+
+function cloneLvglFactoryDefaults() {
+    return { build: { ...LVGL_FACTORY_DEFAULTS.build } };
+}
+
+function getLvglSettings() {
+    const defaults = cloneLvglFactoryDefaults();
+    try {
+        const stored = JSON.parse(window.localStorage.getItem(LVGL_SETTINGS_STORAGE_KEY) || "null");
+        if (!stored || typeof stored !== "object" || Array.isArray(stored)) return defaults;
+        if (stored.build && typeof stored.build === "object" && !Array.isArray(stored.build)) {
+            defaults.build = { ...defaults.build, ...stored.build };
+        }
+    } catch {
+        return defaults;
+    }
+    return defaults;
+}
+
+function saveLvglSettings(settings) {
+    window.localStorage.setItem(LVGL_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function resetLvglSettings() {
+    window.localStorage.removeItem(LVGL_SETTINGS_STORAGE_KEY);
+    return cloneLvglFactoryDefaults();
+}
+
+function setFormValue(id, value, dispatchChange = false) {
+    const field = document.getElementById(id);
+    if (!field) return;
+    field.value = value ?? "";
+    if (dispatchChange) field.dispatchEvent(new Event("change", { bubbles: true }));
+    if (typeof refreshCustomSelect === "function" && field.tagName === "SELECT") {
+        refreshCustomSelect(field);
+    }
+}
+
 let currentJobId = null;
 let currentDownloadUrl = null;
 let currentJob = null;
@@ -25,6 +138,7 @@ const TOOL_SUB_NAV_ITEMS = {
         { label: "远端编译", href: "/tools/lvgl/build", exact: true },
         { label: "预览查看", href: "/tools/lvgl/preview", exact: true },
         { label: "编译历史", href: "/tools/lvgl/jobs", exact: true },
+        { label: "设置", href: "/tools/lvgl/settings", exact: true },
     ],
 };
 
@@ -167,6 +281,7 @@ function refreshCustomSelect(select) {
 
     const value = custom.querySelector(".custom-select-value");
     const menu = custom.querySelector(".custom-select-menu");
+    const trigger = custom.querySelector(".custom-select-trigger");
     const selectedOption = select.options[select.selectedIndex] || select.options[0];
 
     value.textContent = selectedOption ? selectedOption.textContent : "";
@@ -188,7 +303,7 @@ function refreshCustomSelect(select) {
             refreshCustomSelect(select);
             custom.classList.remove("open");
             setSelectLayer(custom, false);
-            trigger.setAttribute("aria-expanded", "false");
+            if (trigger) trigger.setAttribute("aria-expanded", "false");
         });
 
         menu.appendChild(item);

@@ -1202,6 +1202,70 @@ th { color: #fed7aa; font-size: 13px; }
     opacity: 0.45;
 }
 
+.settings-panel {
+    border-color: rgba(148, 163, 184, 0.26);
+}
+
+.lvgl-settings-ui-panel {
+    display: none;
+}
+
+.settings-panel::before {
+    content: "";
+    position: absolute;
+    top: 22px;
+    bottom: 22px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 999px 999px 0;
+    background: linear-gradient(180deg, var(--accent), rgba(249, 115, 22, 0.18));
+}
+
+.settings-kicker {
+    margin-bottom: 6px;
+    color: #fdba74;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.settings-page-link {
+    flex: 0 0 auto;
+    color: #fdba74;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.settings-page-link:hover {
+    color: #ffedd5;
+}
+
+.settings-save-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px 24px;
+    align-items: center;
+}
+
+.settings-save-panel h2 {
+    margin-bottom: 6px;
+}
+
+.settings-save-panel .actions {
+    margin: 0;
+    justify-content: flex-end;
+}
+
+.settings-status,
+.settings-save-panel > .status {
+    grid-column: 1 / -1;
+    min-height: 0;
+    padding: 12px 16px;
+    color: #cbd5e1;
+}
+
 #lvglJobsBody .tag {
     font-size: 11px;
     padding: 2px 8px;
@@ -1233,5 +1297,11 @@ th { color: #fed7aa; font-size: 13px; }
     }
     .lvgl-workbench .log-box {
         min-height: 380px;
+    }
+    .settings-save-panel {
+        grid-template-columns: 1fr;
+    }
+    .settings-save-panel .actions {
+        justify-content: flex-start;
     }
 }

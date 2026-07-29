@@ -1,4 +1,5 @@
 let flashJobs = [];
+let flashPageDefaults = getEspSettings().flash;
 
 function flashEscapeHtml(value) {
     return String(value ?? "")
@@ -126,7 +127,10 @@ async function refreshSerialPorts() {
             select.appendChild(opt);
         });
 
-        const defaultPort = data.default_port || data.ports[0].device;
+        const configuredPort = flashPageDefaults.serial_port;
+        const defaultPort = data.ports.some((port) => port.device === configuredPort)
+            ? configuredPort
+            : data.default_port || data.ports[0].device;
         select.value = defaultPort;
         select.dispatchEvent(new Event("change", { bubbles: true }));
         setFlashStatus([
@@ -189,5 +193,8 @@ async function flashFirmware() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    flashPageDefaults = getEspSettings().flash;
+    setFormValue("flashBaud", flashPageDefaults.baud);
+    setFormValue("flashChip", flashPageDefaults.chip);
     loadFlashJobs();
 });

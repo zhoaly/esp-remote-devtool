@@ -1495,6 +1495,11 @@ def lvgl_tools_jobs() -> FileResponse:
     return ui_file("pages/lvgl-jobs.html")
 
 
+@app.get("/tools/lvgl/settings")
+def lvgl_tools_settings() -> FileResponse:
+    return ui_file("pages/lvgl-settings.html")
+
+
 @app.get("/ui")
 def legacy_ui_home() -> RedirectResponse:
     return RedirectResponse(url="/tools/esp")

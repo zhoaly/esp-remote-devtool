@@ -1,4 +1,5 @@
 let remoteWorkspaces = [];
+let buildPageDefaults = getEspSettings().build;
 let idfImageConfig = {
     default_idf_image: "espressif/idf:v6.0.1",
     allowed_idf_images: ["espressif/idf:v6.0.1"],
@@ -112,7 +113,7 @@ function getSelectedIdfImageSafe() {
     }
 }
 
-function renderWorkspaces(workspaces) {
+function renderWorkspaces(workspaces, preferredWorkspace = "", preferredImage = "") {
     const select = document.getElementById("remoteWorkspace");
     const hint = document.getElementById("remoteWorkspaceHint");
     select.innerHTML = "";
@@ -137,26 +138,30 @@ function renderWorkspaces(workspaces) {
         select.appendChild(opt);
     });
 
+    if (preferredWorkspace && workspaces.some((workspace) => workspace.workspace_id === preferredWorkspace)) {
+        select.value = preferredWorkspace;
+    }
+
     select.onchange = () => renderIdfImageOptions(select.selectedOptions[0]?.dataset.idfImage || "");
     hint.textContent = "远端固定工作区构建会直接使用服务器白名单路径，不会读取 Windows 本地工程路径。";
-    renderIdfImageOptions(select.selectedOptions[0]?.dataset.idfImage || "");
+    renderIdfImageOptions(preferredImage || select.selectedOptions[0]?.dataset.idfImage || "");
 }
 
-async function loadIdfImages() {
+async function loadIdfImages(preferredImage = "") {
     try {
         idfImageConfig = await apiGet("/api/idf-images");
-        renderIdfImageOptions(idfImageConfig.default_idf_image);
+        renderIdfImageOptions(preferredImage || idfImageConfig.default_idf_image);
     } catch (err) {
         document.getElementById("idfImageHint").textContent = `加载 IDF 版本列表失败: ${err.message}`;
         renderIdfImageOptions();
     }
 }
 
-async function loadWorkspaces() {
+async function loadWorkspaces(preferredWorkspace = "", preferredImage = "") {
     try {
         const data = await apiGet("/api/workspaces");
         remoteWorkspaces = data.workspaces || [];
-        renderWorkspaces(remoteWorkspaces);
+        renderWorkspaces(remoteWorkspaces, preferredWorkspace, preferredImage);
     } catch (err) {
         remoteWorkspaces = [];
         renderWorkspaces([]);
@@ -297,8 +302,14 @@ async function refreshBuildLog() {
 
 document.addEventListener("DOMContentLoaded", () => {
     if (document.getElementById("sourceMode")) {
-        loadIdfImages();
-        loadWorkspaces();
+        buildPageDefaults = getEspSettings().build;
+        setFormValue("sourceMode", buildPageDefaults.source_mode);
+        setFormValue("projectPath", buildPageDefaults.project_path);
+        setFormValue("projectName", buildPageDefaults.project_name);
+        setFormValue("target", buildPageDefaults.target);
+        setFormValue("idfImageCustom", buildPageDefaults.idf_image);
         handleSourceModeChange();
+        loadIdfImages(buildPageDefaults.idf_image);
+        loadWorkspaces(buildPageDefaults.remote_workspace, buildPageDefaults.idf_image);
     }
 });

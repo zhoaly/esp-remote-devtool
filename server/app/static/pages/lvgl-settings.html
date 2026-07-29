@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LVGL Settings - ZLYHUB</title>
+    <link rel="stylesheet" href="/static/css/common.css?v=lvgl-settings-20260721">
+</head>
+<body>
+    <div class="shell">
+        <nav class="top-nav"></nav>
+
+        <section class="hero">
+            <div class="eyebrow">LVGL Settings</div>
+            <h1>Simulator defaults.</h1>
+            <div class="hero-copy">
+                配置 LVGL 模拟器远端编译页面打开时的默认填充值。设置保存在当前浏览器中；远端工作区被选中后，工作区自身的工程名、尺寸和 LVGL 版本仍会优先应用。
+            </div>
+            <div class="hero-grid">
+                <div class="stat">
+                    <div class="stat-label">Remote Host</div>
+                    <div class="stat-value" id="lvglSettingsServerUrl">-</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">LVGL Version</div>
+                    <div class="stat-value" id="lvglSettingsVersion">-</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Storage</div>
+                    <div class="stat-value">当前浏览器</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel settings-panel">
+            <div class="panel-heading">
+                <div>
+                    <div class="settings-kicker">Build Source</div>
+                    <h2>构建来源默认值</h2>
+                </div>
+                <a class="settings-page-link" href="/tools/lvgl/build">打开编译页面 →</a>
+            </div>
+            <div class="grid">
+                <div class="field">
+                    <label for="lvglSettingSourceMode">源码模式</label>
+                    <select id="lvglSettingSourceMode" onchange="handleLvglSettingsSourceModeChange()">
+                        <option value="local_path">本地上传构建</option>
+                        <option value="remote_workspace">远端工作区构建</option>
+                    </select>
+                </div>
+                <div class="field" id="lvglSettingRemoteWorkspaceField">
+                    <label for="lvglSettingRemoteWorkspace">远端工作区</label>
+                    <select id="lvglSettingRemoteWorkspace">
+                        <option value="">自动选择第一个可用工作区</option>
+                    </select>
+                </div>
+                <div class="field full lvgl-settings-local-field">
+                    <label for="lvglSettingLocalBuildMode">本地上传模式</label>
+                    <select id="lvglSettingLocalBuildMode" onchange="handleLvglSettingsLocalModeChange()">
+                        <option value="ui_package">仅 UI 源码</option>
+                        <option value="full_project">完整 Web 工程</option>
+                    </select>
+                </div>
+                <div class="field full lvgl-settings-local-field">
+                    <label for="lvglSettingProjectPath">Windows LVGL Project Path</label>
+                    <input id="lvglSettingProjectPath" autocomplete="off" placeholder="C:\Users\name\Projects\lvgl_simulator">
+                    <div class="hint">该路径只由当前电脑上的 Local Agent 读取，不会发送给其他浏览器。</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel settings-panel lvgl-settings-ui-panel">
+            <div class="panel-heading">
+                <div>
+                    <div class="settings-kicker">UI Package</div>
+                    <h2>仅 UI 源码模式默认值</h2>
+                </div>
+            </div>
+            <div class="grid">
+                <div class="field full">
+                    <label for="lvglSettingUiRoots">UI 源码目录</label>
+                    <input id="lvglSettingUiRoots" autocomplete="off" placeholder="ui, src/ui, generated">
+                    <div class="hint">多个相对目录使用英文逗号分隔；留空时由 Local Agent 使用默认扫描规则。</div>
+                </div>
+                <div class="field full">
+                    <label for="lvglSettingIncludeDirs">Include 目录</label>
+                    <input id="lvglSettingIncludeDirs" autocomplete="off" placeholder="ui, src/ui, generated, include">
+                </div>
+                <div class="field">
+                    <label for="lvglSettingEntryHeader">入口头文件</label>
+                    <input id="lvglSettingEntryHeader" autocomplete="off" placeholder="ui.h">
+                </div>
+                <div class="field">
+                    <label for="lvglSettingEntryCall">入口函数</label>
+                    <input id="lvglSettingEntryCall" autocomplete="off" placeholder="ui_init or lv_demo_widgets">
+                </div>
+            </div>
+        </section>
+
+        <section class="panel settings-panel">
+            <div class="panel-heading">
+                <div>
+                    <div class="settings-kicker">Simulator Canvas</div>
+                    <h2>工程与预览默认值</h2>
+                </div>
+            </div>
+            <div class="grid">
+                <div class="field full">
+                    <label for="lvglSettingProjectName">工程名</label>
+                    <input id="lvglSettingProjectName" autocomplete="off" placeholder="lvgl_project">
+                </div>
+                <div class="field">
+                    <label for="lvglSettingWidth">预览宽度</label>
+                    <input id="lvglSettingWidth" type="number" min="120" max="4096" step="1">
+                </div>
+                <div class="field">
+                    <label for="lvglSettingHeight">预览高度</label>
+                    <input id="lvglSettingHeight" type="number" min="120" max="4096" step="1">
+                </div>
+                <div class="field full">
+                    <div class="hint">远端工作区模式下，所选工作区配置的工程名、宽高和 LVGL 版本会覆盖这里的默认值。</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel settings-save-panel">
+            <div>
+                <h2>保存设置</h2>
+                <div class="hint">保存后重新打开 LVGL 远端编译页面即可使用新的默认填充值。</div>
+            </div>
+            <div class="actions">
+                <button class="primary" type="button" onclick="saveLvglDefaultSettings()">保存默认值</button>
+                <button class="secondary" type="button" onclick="restoreLvglFactoryDefaults()">恢复初始默认值</button>
+            </div>
+            <div id="lvglSettingsStatus" class="status settings-status">正在加载设置...</div>
+        </section>
+    </div>
+
+    <script src="/static/js/common.js?v=lvgl-settings-20260721"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/lvgl-settings.js?v=lvgl-settings-20260721"></script>
+</body>
+</html>
