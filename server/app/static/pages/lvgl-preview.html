@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LVGL Preview - ZLYHUB</title>
-    <link rel="stylesheet" href="/static/css/common.css?v=lvgl-preview-card-overflow-20260720">
+    <link rel="stylesheet" href="/static/css/common.css?v=lvgl-preview-encoder-20260729">
 </head>
 <body>
     <div class="shell">
@@ -54,6 +54,27 @@
                     <iframe id="lvglPreviewFrame" title="LVGL UI Preview"></iframe>
                     <div class="preview-empty" id="lvglPreviewEmpty">请选择一个成功的 LVGL 构建在此预览。</div>
                 </div>
+                <div class="lvgl-encoder-panel" id="lvglEncoderPanel">
+                    <div class="lvgl-encoder-heading">
+                        <span>Encoder Input</span>
+                        <span class="tag" id="lvglEncoderBadge">未加载</span>
+                    </div>
+                    <div class="lvgl-encoder-controls" role="group" aria-label="LVGL 编码器模拟控制">
+                        <button class="secondary lvgl-encoder-turn" id="lvglEncoderLeftBtn" type="button" disabled aria-label="编码器逆时针旋转一步">
+                            <span aria-hidden="true">↶</span>
+                            <small>逆时针</small>
+                        </button>
+                        <button class="lvgl-encoder-press" id="lvglEncoderPressBtn" type="button" disabled aria-pressed="false">
+                            <span>按下</span>
+                            <small>长按可保持</small>
+                        </button>
+                        <button class="secondary lvgl-encoder-turn" id="lvglEncoderRightBtn" type="button" disabled aria-label="编码器顺时针旋转一步">
+                            <span aria-hidden="true">↷</span>
+                            <small>顺时针</small>
+                        </button>
+                    </div>
+                    <div class="lvgl-encoder-hint" id="lvglEncoderHint">请选择支持编码器桥接的完整工程预览。</div>
+                </div>
             </div>
 
             <div class="panel">
@@ -72,6 +93,6 @@
     <script src="/static/js/common.js?v=lvgl-pages-20260710"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/lvgl-common.js?v=lvgl-preview-fill-2-20260710"></script>
-    <script src="/static/js/lvgl-preview.js?v=lvgl-preview-device-20260710"></script>
+    <script src="/static/js/lvgl-preview.js?v=lvgl-preview-encoder-20260729"></script>
 </body>
 </html>
