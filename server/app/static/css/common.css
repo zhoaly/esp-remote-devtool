@@ -242,8 +242,13 @@
             position: absolute;
             width: 1px;
             height: 1px;
+            min-width: 0;
+            min-height: 0;
+            padding: 0;
+            border: 0;
             opacity: 0;
             pointer-events: none;
+            clip-path: inset(50%);
         }
 
         .custom-select {
@@ -253,6 +258,15 @@
 
         .custom-select.open {
             z-index: 1002;
+        }
+
+        .custom-select.disabled {
+            pointer-events: none;
+        }
+
+        .custom-select.disabled .custom-select-trigger {
+            cursor: not-allowed;
+            opacity: 0.46;
         }
 
         .custom-select-trigger {
@@ -944,12 +958,23 @@ th { color: #fed7aa; font-size: 13px; }
     word-break: break-all;
 }
 .lvgl-workbench {
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+    align-items: start;
 }
-.lvgl-workbench > .panel {
+.lvgl-workbench-column {
+    display: grid;
+    align-content: start;
+    gap: 20px;
+    min-width: 0;
+}
+.lvgl-workbench-column > .panel {
     display: flex;
     flex-direction: column;
     min-height: 0;
+}
+.lvgl-tool-card > .panel-heading {
+    min-height: 34px;
+    margin-bottom: 18px;
 }
 .lvgl-workbench .log-box {
     flex: 1;
@@ -1031,9 +1056,18 @@ th { color: #fed7aa; font-size: 13px; }
     height: 100%;
     display: block;
     border: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    scrollbar-width: none;
     background: #0a0e17;
     opacity: 0;
     transition: opacity 0.35s ease;
+}
+
+.preview-frame-wrap iframe::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
 }
 
 .preview-frame-wrap iframe[src]:not([src=""]) {
@@ -1042,6 +1076,71 @@ th { color: #fed7aa; font-size: 13px; }
 
 .preview-frame-wrap iframe[src]:not([src=""]) ~ .preview-empty {
     display: none;
+}
+
+.lvgl-workbench.workspace-preview-active {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.preview-frame-wrap.workspace-preview {
+    width: 100%;
+    height: clamp(540px, 72vh, 760px);
+    aspect-ratio: auto;
+    border-width: 1px;
+    border-radius: 22px;
+}
+
+.preview-frame-wrap.workspace-preview::before {
+    display: none;
+}
+
+.lvgl-preview-gate {
+    position: absolute;
+    z-index: 5;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 28px;
+    background:
+        linear-gradient(180deg, rgba(5, 7, 13, 0.9), rgba(9, 17, 31, 0.96));
+    color: #e2e8f0;
+    text-align: center;
+}
+
+.lvgl-preview-card[data-state="loading"] .lvgl-preview-gate,
+.lvgl-preview-card[data-state="error"] .lvgl-preview-gate {
+    display: flex;
+}
+
+.lvgl-preview-gate strong {
+    font-size: 14px;
+}
+
+.lvgl-preview-gate > span:not(.lvgl-preview-spinner) {
+    max-width: 220px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.lvgl-preview-spinner {
+    width: 28px;
+    height: 28px;
+    border: 2px solid rgba(148, 163, 184, 0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: lvgl-spin 0.9s linear infinite;
+}
+
+.lvgl-preview-card[data-state="error"] .lvgl-preview-spinner {
+    display: none;
+}
+
+@keyframes lvgl-spin {
+    to { transform: rotate(360deg); }
 }
 
 .preview-empty {
@@ -1067,27 +1166,197 @@ th { color: #fed7aa; font-size: 13px; }
     color: var(--accent);
 }
 
-.lvgl-encoder-panel {
-    width: min(100%, 440px);
-    margin: 2px auto 0;
-    padding: 14px;
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    border-radius: 18px;
-    background:
-        linear-gradient(145deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.62));
+.lvgl-card-state {
+    display: grid;
+    align-content: center;
+    gap: 18px;
+    color: var(--muted);
 }
 
-.lvgl-encoder-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
+.lvgl-mock-card .lvgl-card-state {
+    min-height: 400px;
+}
+
+.lvgl-encoder-card .lvgl-card-state {
+    min-height: 116px;
+}
+
+.lvgl-tool-card[data-state="ready"] .lvgl-card-state {
+    display: none;
+}
+
+.lvgl-tool-card:not([data-state="ready"]) .lvgl-card-content {
+    display: none;
+}
+
+.lvgl-card-content {
+    animation: lvgl-card-content-in 0.2s ease-out;
+}
+
+@keyframes lvgl-card-content-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.lvgl-state-copy {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+    padding: 0 18px;
+    text-align: center;
+}
+
+.lvgl-state-copy strong {
     color: #e2e8f0;
+    font-size: 13px;
+}
+
+.lvgl-state-copy span {
+    max-width: 360px;
+    font-size: 11px;
+    line-height: 1.55;
+}
+
+.lvgl-tool-card[data-state="loading"] .lvgl-state-copy strong {
+    color: #fed7aa;
+}
+
+.lvgl-tool-card[data-state="unavailable"] .lvgl-state-copy strong,
+.lvgl-tool-card[data-state="error"] .lvgl-state-copy strong {
+    color: #fecaca;
+}
+
+.lvgl-skeleton {
+    display: none;
+}
+
+.lvgl-tool-card[data-state="loading"] .lvgl-skeleton {
+    display: grid;
+}
+
+.lvgl-skeleton span {
+    min-height: 42px;
+    border-radius: 12px;
+    background:
+        linear-gradient(
+            100deg,
+            rgba(30, 41, 59, 0.62) 20%,
+            rgba(51, 65, 85, 0.72) 40%,
+            rgba(30, 41, 59, 0.62) 60%
+        );
+    background-size: 220% 100%;
+    animation: lvgl-skeleton-wave 1.5s ease-in-out infinite;
+}
+
+.lvgl-mock-skeleton {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.lvgl-mock-skeleton .wide {
+    grid-column: 1 / -1;
+}
+
+.lvgl-encoder-skeleton {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+@keyframes lvgl-skeleton-wave {
+    0% { background-position: 120% 0; }
+    100% { background-position: -120% 0; }
+}
+
+.lvgl-mock-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+}
+
+.lvgl-control-field,
+.lvgl-control-toggle {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+    color: #cbd5e1;
     font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.lvgl-control-field-wide {
+    grid-column: 1 / -1;
+}
+
+.lvgl-control-field input,
+.lvgl-control-field select {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 11px;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.82);
+    color: var(--text);
+    font: inherit;
+}
+
+.lvgl-mock-card select.native-select-hidden,
+.lvgl-mock-card select.native-select-hidden:disabled {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+    clip-path: inset(50%);
+}
+
+.lvgl-control-toggle {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    align-self: end;
+    min-height: 40px;
+    padding: 0 11px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.56);
+}
+
+.lvgl-control-toggle input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}
+
+.lvgl-mock-presets,
+.lvgl-mock-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin-top: 14px;
+}
+
+.lvgl-mock-presets button,
+.lvgl-mock-actions button {
+    min-width: 0;
+    min-height: 40px;
+    padding: 9px 10px;
+}
+
+.lvgl-mock-card :disabled:not(.native-select-hidden) {
+    cursor: not-allowed;
+    opacity: 0.46;
+}
+
+.lvgl-card-hint {
+    min-height: 18px;
+    margin-top: 11px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
 }
 
 .lvgl-encoder-controls {
@@ -1135,22 +1404,13 @@ th { color: #fed7aa; font-size: 13px; }
     opacity: 0.42;
 }
 
-.lvgl-encoder-hint {
-    min-height: 18px;
-    margin-top: 10px;
-    color: var(--muted);
-    font-size: 11px;
-    line-height: 1.5;
-    text-align: center;
-}
-
 /* Panel heading refinements for preview */
-.lvgl-workbench > .panel:first-child .panel-heading {
+.lvgl-preview-card .panel-heading {
     position: relative;
     padding-bottom: 2px;
 }
 
-.lvgl-workbench > .panel:first-child .panel-heading::after {
+.lvgl-preview-card .panel-heading::after {
     content: "";
     position: absolute;
     bottom: 0;

@@ -38,7 +38,23 @@ function stripEmscriptenChrome(frame) {
             #status         { display: none !important; }
             #progress       { display: none !important; }
             .spinner        { display: none !important; }
-            html, body      { width: 100%; height: 100%; margin: 0; padding: 0; background: transparent; overflow: hidden; }
+            html, body {
+                width: 100%;
+                height: 100%;
+                min-height: 0;
+                margin: 0;
+                padding: 0;
+                background: transparent;
+                overflow: hidden;
+                overscroll-behavior: none;
+                scrollbar-width: none;
+            }
+            html::-webkit-scrollbar,
+            body::-webkit-scrollbar {
+                display: none;
+                width: 0;
+                height: 0;
+            }
             .emscripten_border {
                 border: none !important;
                 width: 100% !important;

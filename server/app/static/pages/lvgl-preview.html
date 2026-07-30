@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LVGL Preview - ZLYHUB</title>
-    <link rel="stylesheet" href="/static/css/common.css?v=lvgl-preview-encoder-20260729">
+    <link rel="stylesheet" href="/static/css/common.css?v=lvgl-preview-no-scroll-20260730">
 </head>
 <body>
     <div class="shell">
@@ -43,56 +43,142 @@
         </section>
 
         <section class="logs lvgl-workbench">
-            <div class="panel">
-                <div class="panel-heading">
-                    <h2>2. Preview</h2>
-                    <div style="display:flex;align-items:center;gap:8px">
-                        <span class="tag" id="lvglPreviewLiveBadge" style="display:none">运行中</span>
+            <div class="lvgl-workbench-column lvgl-workbench-primary">
+                <div class="panel lvgl-tool-card lvgl-preview-card" id="lvglPreviewCard" data-state="idle">
+                    <div class="panel-heading">
+                        <h2>2. Preview</h2>
+                        <span class="tag" id="lvglPreviewLiveBadge">未加载</span>
+                    </div>
+                    <div class="preview-frame-wrap" id="lvglPreviewWrap">
+                        <iframe id="lvglPreviewFrame" title="LVGL UI Preview" scrolling="no"></iframe>
+                        <div class="lvgl-preview-gate" id="lvglPreviewGate" aria-live="polite">
+                            <span class="lvgl-preview-spinner" aria-hidden="true"></span>
+                            <strong id="lvglPreviewGateTitle">等待预览</strong>
+                            <span id="lvglPreviewGateMessage">请选择一个成功的 LVGL 构建。</span>
+                            <button class="secondary compact-button" id="lvglPreviewRetryBtn" type="button" hidden>重新加载</button>
+                        </div>
+                        <div class="preview-empty" id="lvglPreviewEmpty">请选择一个成功的 LVGL 构建在此预览。</div>
                     </div>
                 </div>
-                <div class="preview-frame-wrap loading" id="lvglPreviewWrap">
-                    <iframe id="lvglPreviewFrame" title="LVGL UI Preview"></iframe>
-                    <div class="preview-empty" id="lvglPreviewEmpty">请选择一个成功的 LVGL 构建在此预览。</div>
-                </div>
-                <div class="lvgl-encoder-panel" id="lvglEncoderPanel">
-                    <div class="lvgl-encoder-heading">
-                        <span>Encoder Input</span>
+
+                <div class="panel lvgl-tool-card lvgl-encoder-card" id="lvglEncoderCard" data-state="idle" aria-busy="false">
+                    <div class="panel-heading">
+                        <h2>3. Encoder Input</h2>
                         <span class="tag" id="lvglEncoderBadge">未加载</span>
                     </div>
-                    <div class="lvgl-encoder-controls" role="group" aria-label="LVGL 编码器模拟控制">
-                        <button class="secondary lvgl-encoder-turn" id="lvglEncoderLeftBtn" type="button" disabled aria-label="编码器逆时针旋转一步">
-                            <span aria-hidden="true">↶</span>
-                            <small>逆时针</small>
-                        </button>
-                        <button class="lvgl-encoder-press" id="lvglEncoderPressBtn" type="button" disabled aria-pressed="false">
-                            <span>按下</span>
-                            <small>长按可保持</small>
-                        </button>
-                        <button class="secondary lvgl-encoder-turn" id="lvglEncoderRightBtn" type="button" disabled aria-label="编码器顺时针旋转一步">
-                            <span aria-hidden="true">↷</span>
-                            <small>顺时针</small>
-                        </button>
+                    <div class="lvgl-card-state" id="lvglEncoderState" aria-live="polite">
+                        <div class="lvgl-encoder-skeleton lvgl-skeleton" aria-hidden="true">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <div class="lvgl-state-copy">
+                            <strong id="lvglEncoderStateTitle">等待预览</strong>
+                            <span id="lvglEncoderStateMessage">请选择支持编码器桥接的构建。</span>
+                        </div>
                     </div>
-                    <div class="lvgl-encoder-hint" id="lvglEncoderHint">请选择支持编码器桥接的完整工程预览。</div>
+                    <div class="lvgl-card-content lvgl-encoder-content" id="lvglEncoderContent" aria-hidden="true" inert>
+                        <div class="lvgl-encoder-controls" role="group" aria-label="LVGL 编码器模拟控制">
+                            <button class="secondary lvgl-encoder-turn" id="lvglEncoderLeftBtn" type="button" disabled aria-label="编码器逆时针旋转一步">
+                                <span aria-hidden="true">↶</span>
+                                <small>逆时针</small>
+                            </button>
+                            <button class="lvgl-encoder-press" id="lvglEncoderPressBtn" type="button" disabled aria-pressed="false">
+                                <span>按下</span>
+                                <small>长按可保持</small>
+                            </button>
+                            <button class="secondary lvgl-encoder-turn" id="lvglEncoderRightBtn" type="button" disabled aria-label="编码器顺时针旋转一步">
+                                <span aria-hidden="true">↷</span>
+                                <small>顺时针</small>
+                            </button>
+                        </div>
+                        <div class="lvgl-card-hint" id="lvglEncoderHint">滚轮或 ←/→ 旋转，Enter/Space 按下。</div>
+                    </div>
                 </div>
             </div>
 
-            <div class="panel">
-                <h2>3. Actions</h2>
-                <div id="lvglPreviewStatusBox" class="status">请选择一个构建进行预览。</div>
-                <div class="links">
-                    <a id="lvglOpenPreviewLink" class="disabled" href="#" target="_blank">打开完整预览</a>
-                    <a id="lvglOpenLogLink" class="disabled" href="#" target="_blank">打开日志</a>
-                    <a id="lvglDownloadLink" class="disabled" href="#" target="_blank">下载产物包</a>
-                    <a href="#" onclick="reloadLvglPreview(); return false;">刷新预览窗口</a>
+            <div class="lvgl-workbench-column lvgl-workbench-secondary">
+                <div class="panel lvgl-tool-card lvgl-mock-card" id="lvglMockCard" data-state="idle" aria-busy="false">
+                    <div class="panel-heading">
+                        <h2>4. Mock Data</h2>
+                        <span class="tag" id="lvglMockBadge">未加载</span>
+                    </div>
+                    <div class="lvgl-card-state" id="lvglMockState" aria-live="polite">
+                        <div class="lvgl-mock-skeleton lvgl-skeleton" aria-hidden="true">
+                            <span></span><span></span><span></span><span></span>
+                            <span class="wide"></span><span class="wide"></span>
+                        </div>
+                        <div class="lvgl-state-copy">
+                            <strong id="lvglMockStateTitle">等待预览</strong>
+                            <span id="lvglMockStateMessage">请选择支持 Mock Data 桥接的构建。</span>
+                        </div>
+                    </div>
+                    <div class="lvgl-card-content lvgl-mock-content" id="lvglMockContent" aria-hidden="true" inert>
+                        <div class="lvgl-mock-fields">
+                            <label class="lvgl-control-field">
+                                <span>Time</span>
+                                <input id="lvglMockTime" type="time" value="09:41" disabled>
+                            </label>
+                            <label class="lvgl-control-toggle">
+                                <input id="lvglMockTimeSynced" type="checkbox" checked disabled>
+                                <span>Time synced</span>
+                            </label>
+                            <label class="lvgl-control-field">
+                                <span>Temperature</span>
+                                <input id="lvglMockTemperature" type="number" min="-99" max="99" value="26" disabled>
+                            </label>
+                            <label class="lvgl-control-toggle">
+                                <input id="lvglMockWeatherAvailable" type="checkbox" checked disabled>
+                                <span>Weather available</span>
+                            </label>
+                            <label class="lvgl-control-field lvgl-control-field-wide">
+                                <span>Wi-Fi</span>
+                                <select id="lvglMockWifi" disabled>
+                                    <option value="disconnected">Disconnected</option>
+                                    <option value="connecting">Connecting</option>
+                                    <option value="connected" selected>Connected</option>
+                                </select>
+                            </label>
+                            <label class="lvgl-control-field lvgl-control-field-wide">
+                                <span>Bluetooth</span>
+                                <select id="lvglMockBluetooth" disabled>
+                                    <option value="off">Off</option>
+                                    <option value="advertising">Advertising</option>
+                                    <option value="connected" selected>Connected</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="lvgl-mock-presets" aria-label="Mock data presets">
+                            <button class="secondary" id="lvglMockOfflineBtn" type="button" disabled>Offline</button>
+                            <button class="secondary" id="lvglMockConnectingBtn" type="button" disabled>Connecting</button>
+                            <button class="secondary" id="lvglMockOnlineBtn" type="button" disabled>Online</button>
+                            <button class="secondary" id="lvglMockFullyConnectedBtn" type="button" disabled>Fully connected</button>
+                        </div>
+                        <div class="lvgl-mock-actions">
+                            <button id="lvglMockApplyBtn" type="button" disabled>Apply</button>
+                            <button class="secondary" id="lvglMockResetBtn" type="button" disabled>Reset</button>
+                            <button class="secondary" id="lvglMockStartDemoBtn" type="button" disabled>Start demo</button>
+                            <button class="secondary" id="lvglMockStopDemoBtn" type="button" disabled>Stop demo</button>
+                        </div>
+                        <div class="lvgl-card-hint" id="lvglMockHint">控制项会在下一次 UI pump 后更新设备状态栏。</div>
+                    </div>
+                </div>
+
+                <div class="panel lvgl-tool-card lvgl-actions-card">
+                    <h2>5. Actions</h2>
+                    <div id="lvglPreviewStatusBox" class="status">请选择一个构建进行预览。</div>
+                    <div class="links">
+                        <a id="lvglOpenPreviewLink" class="disabled" href="#" target="_blank">打开完整预览</a>
+                        <a id="lvglOpenLogLink" class="disabled" href="#" target="_blank">打开日志</a>
+                        <a id="lvglDownloadLink" class="disabled" href="#" target="_blank">下载产物包</a>
+                        <a href="#" onclick="reloadLvglPreview(); return false;">刷新预览窗口</a>
+                    </div>
                 </div>
             </div>
         </section>
     </div>
 
-    <script src="/static/js/common.js?v=lvgl-settings-20260721"></script>
+    <script src="/static/js/common.js?v=lvgl-preview-loading-cards-20260730"></script>
     <script src="/static/js/api.js"></script>
-    <script src="/static/js/lvgl-common.js?v=lvgl-preview-fill-2-20260710"></script>
-    <script src="/static/js/lvgl-preview.js?v=lvgl-preview-encoder-20260729"></script>
+    <script src="/static/js/lvgl-common.js?v=lvgl-preview-no-scroll-20260730"></script>
+    <script src="/static/js/lvgl-preview.js?v=lvgl-preview-loading-cards-20260730"></script>
 </body>
 </html>

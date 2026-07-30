@@ -283,8 +283,17 @@ function refreshCustomSelect(select) {
     const menu = custom.querySelector(".custom-select-menu");
     const trigger = custom.querySelector(".custom-select-trigger");
     const selectedOption = select.options[select.selectedIndex] || select.options[0];
+    const disabled = select.disabled;
 
     value.textContent = selectedOption ? selectedOption.textContent : "";
+    custom.classList.toggle("disabled", disabled);
+    trigger.disabled = disabled;
+    trigger.setAttribute("aria-disabled", String(disabled));
+    if(disabled) {
+        custom.classList.remove("open");
+        setSelectLayer(custom, false);
+        trigger.setAttribute("aria-expanded", "false");
+    }
     menu.innerHTML = "";
 
     Array.from(select.options).forEach((option) => {
@@ -295,6 +304,7 @@ function refreshCustomSelect(select) {
         item.dataset.value = option.value;
         item.setAttribute("role", "option");
         item.setAttribute("aria-selected", option.selected ? "true" : "false");
+        item.disabled = disabled || option.disabled;
         if (option.selected) item.classList.add("selected");
 
         item.addEventListener("click", () => {
@@ -338,6 +348,7 @@ function enhanceSelect(select) {
     select.insertAdjacentElement("afterend", custom);
 
     trigger.addEventListener("click", () => {
+        if(select.disabled) return;
         const isOpen = custom.classList.contains("open");
         closeCustomSelects(custom);
         custom.classList.toggle("open", !isOpen);
