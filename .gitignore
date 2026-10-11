@@ -25,6 +25,9 @@ server/data/artifacts/*
 server/data/logs/*
 server/data/jobs/*
 server/data/ota/*
+server/data/lvgl/*
+server/data/server.db*
+server/data/worker.lock
 
 !server/data/.gitkeep
 !server/data/uploads/.gitkeep

@@ -183,6 +183,7 @@ async function parseErrorResponse(resp) {
     const text = await resp.text();
     try {
         const data = JSON.parse(text);
+        if (data?.error?.message) return data.error.message;
         return typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data, null, 2);
     } catch {
         return text || `HTTP ${resp.status}`;
@@ -197,7 +198,7 @@ function stopPolling() {
 }
 
 function isEspFirmwareJob(job) {
-    return !job?.tool_type || job.tool_type === "esp_firmware";
+    return job?.kind === "esp";
 }
 
 function isNavItemActive(item, path) {

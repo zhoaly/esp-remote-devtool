@@ -195,8 +195,8 @@ async function loadSettings() {
     populateSettingsForm(settings);
 
     const requests = await Promise.allSettled([
-        apiGet("/api/idf-images"),
-        apiGet("/api/workspaces"),
+        apiGet("/config/esp"),
+        apiGet("/workspaces?kind=esp"),
     ]);
 
     const errors = [];

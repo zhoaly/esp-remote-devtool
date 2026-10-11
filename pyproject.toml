@@ -1,0 +1,14 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"server/app/api/**/*.py" = ["B008"]
+"server/app/api/dependencies.py" = ["B008"]
+"server/app/api/pages.py" = ["B008"]
+"local-agent/src/tray_main.py" = ["RUF001"]
+"local-agent/tests/*.py" = ["E402"]

@@ -8,24 +8,21 @@ import sys
 import tempfile
 import threading
 import webbrowser
+from collections.abc import Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from tkinter import StringVar, Tk, Toplevel, messagebox, ttk
-from typing import Callable
 
 os.environ.setdefault("PYSTRAY_BACKEND", "win32")
 
 import pystray
 import requests
-from PIL import Image
-
 from agent_app import create_app
 from agent_runtime import AgentServerController, ServerSnapshot, ServerStatus
 from config import (
     derive_remote_info_url,
     derive_remote_ui_url,
     get_log_dir,
-    get_user_config_path,
     has_saved_configuration,
     load_settings,
     save_user_settings,
@@ -33,7 +30,7 @@ from config import (
     validate_remote_build_url,
 )
 from flasher import run_esptool_process
-
+from PIL import Image
 
 APP_NAME = "ESP Remote Build Agent"
 MUTEX_NAME = r"Local\ESPRemoteBuildAgent"
@@ -376,9 +373,10 @@ class TrayApplication:
         try:
             webbrowser.open(derive_remote_ui_url(load_settings().remote_build_url))
         except ValueError as exc:
+            message = str(exc)
             self._root.after(
                 0,
-                lambda: messagebox.showerror("地址无效", str(exc)),
+                lambda: messagebox.showerror("地址无效", message),
             )
 
     def _show_settings(

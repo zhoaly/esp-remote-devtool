@@ -46,4 +46,4 @@ is signed with a trusted code-signing certificate.
 
 ## Server package
 
-Run `server/make_release.sh`.
+Run `server/make_release.sh`. Runtime contents under `server/data/`, including SQLite files and old build outputs, are excluded from the archive.

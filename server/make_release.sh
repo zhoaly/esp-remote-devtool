@@ -10,13 +10,12 @@ mkdir -p "$OUTPUT_DIR"
 
 tar \
     --exclude=".git" \
+    --exclude=".pytest_cache" \
+    --exclude="*/__pycache__" \
+    --exclude="*.pyc" \
     --exclude="server/.venv" \
     --exclude="server/.env" \
-    --exclude="server/data/uploads/*" \
-    --exclude="server/data/workspaces/*" \
-    --exclude="server/data/artifacts/*" \
-    --exclude="server/data/logs/*" \
-    --exclude="server/data/jobs/*" \
+    --exclude="server/data" \
     --exclude="local-agent/.venv" \
     --exclude="local-agent/build" \
     --exclude="local-agent/dist" \

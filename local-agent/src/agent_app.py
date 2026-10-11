@@ -2,11 +2,9 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from config import AgentSettings, load_settings
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-
-from config import AgentSettings, load_settings
 from flasher import flash_firmware
 from project_zip import (
     create_lvgl_ui_package_zip,
@@ -14,6 +12,7 @@ from project_zip import (
     validate_lvgl_project_dir,
     validate_project_dir,
 )
+from pydantic import BaseModel, Field
 from remote_upload import (
     upload_lvgl_project_zip,
     upload_lvgl_ui_package_zip,
@@ -58,7 +57,7 @@ def create_app(settings: AgentSettings) -> FastAPI:
         idf_image: str = Field(default=settings.default_idf_image)
         target: str = Field(default=settings.default_target)
 
-    app = FastAPI(title="ESP Local Upload Agent", version="0.1.0")
+    app = FastAPI(title="ESP Local Upload Agent", version="0.2.0")
     app.state.agent_settings = settings
 
     app.add_middleware(

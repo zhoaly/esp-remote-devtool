@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import shutil
 import tempfile
 import zipfile
 from pathlib import Path
-import shutil
 
 import requests
 

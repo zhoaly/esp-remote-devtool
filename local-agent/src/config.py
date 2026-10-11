@@ -7,9 +7,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
-
 APP_DIR_NAME = "ESPRemoteBuildAgent"
-DEFAULT_REMOTE_BUILD_URL = "http://127.0.0.1:8000/api/build/upload"
+DEFAULT_REMOTE_BUILD_URL = "http://127.0.0.1:8000/api/v2/builds/esp/upload"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 
@@ -130,7 +129,7 @@ def derive_remote_ui_url(remote_build_url: str) -> str:
 
 
 def derive_remote_info_url(remote_build_url: str) -> str:
-    return f"{derive_remote_origin(remote_build_url)}/api/info"
+    return f"{derive_remote_origin(remote_build_url)}/api/v2/info"
 
 
 def _derive_allowed_origins(remote_build_url: str) -> list[str]:

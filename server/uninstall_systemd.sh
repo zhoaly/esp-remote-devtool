@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SERVICE_NAME="esp-remote-build-flash.service"
-SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}"
+SERVICES=(esp-remote-api.service esp-remote-worker.service esp-remote-migrate.service esp-remote-build-flash.service)
 
-sudo systemctl disable --now "$SERVICE_NAME" || true
-sudo rm -f "$SERVICE_PATH"
+for service in "${SERVICES[@]}"; do
+    sudo systemctl disable --now "$service" 2>/dev/null || true
+    sudo rm -f "/etc/systemd/system/${service}"
+done
 sudo systemctl daemon-reload
-echo "Removed ${SERVICE_NAME}"
+echo "Removed ESP Remote systemd services"

@@ -114,7 +114,7 @@ async function loadLvglDefaultSettings() {
     populateLvglSettingsForm(settings);
 
     try {
-        const data = await apiGet("/api/lvgl/workspaces");
+        const data = await apiGet("/workspaces?kind=lvgl");
         lvglSettingsWorkspaces = data.workspaces || [];
         renderLvglSettingsWorkspaces(settings.build.remote_workspace);
         setText("lvglSettingsVersion", data.default_lvgl_version || "9.x");

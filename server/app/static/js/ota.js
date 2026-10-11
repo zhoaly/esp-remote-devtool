@@ -40,8 +40,8 @@ function normalizeOtaVersionForInput(version) {
 
 function sortReleasesNewestFirst(releases) {
     return [...releases].sort((a, b) => {
-        const left = String(a.created_at || a.release_id || "");
-        const right = String(b.created_at || b.release_id || "");
+        const left = String(a.created_at || a.id || "");
+        const right = String(b.created_at || b.id || "");
         return right.localeCompare(left);
     });
 }
@@ -58,10 +58,10 @@ function latestReleaseForJob(jobId) {
 function releaseForJob(job) {
     if (!job) return null;
     if (job.ota_release_id) {
-        const exact = otaReleases.find((release) => release.release_id === job.ota_release_id);
+        const exact = otaReleases.find((release) => release.id === job.ota_release_id);
         if (exact) return exact;
     }
-    return latestReleaseForJob(job.job_id);
+    return latestReleaseForJob(job.id);
 }
 
 function applyReleaseUrls(release, job) {
@@ -74,7 +74,7 @@ function validateOtaForm() {
     if (!currentJobId || !currentJob) {
         return "请选择可发布的构建任务。";
     }
-    if (currentJob.status !== "success") {
+    if (currentJob.status !== "succeeded") {
         return "只有成功构建任务可以发布。";
     }
     if (!currentJob.ota_publishable) {
@@ -124,14 +124,14 @@ function renderSelectedJobStatus() {
     const limit = currentJob.ota_partition_limit || 0;
     const release = releaseForJob(currentJob);
     const lines = [
-        `Job ID: ${currentJob.job_id}`,
+        `Job ID: ${currentJob.id}`,
         `项目: ${currentJob.project_name || "-"}`,
         `Target: ${currentJob.target || "-"}`,
-        `Version: ${normalizeOtaVersionForInput(currentJob.project_version) || "-"}`,
+        `Version: ${normalizeOtaVersionForInput(currentJob.ota_project_version) || "-"}`,
         `App Bin: ${currentJob.ota_app_bin_name || "未识别"}`,
         `App Size: ${currentJob.ota_app_size || 0} / ${limit} bytes`,
         `App SHA256: ${currentJob.ota_app_sha256 || "-"}`,
-        release ? `已发布 Release: ${release.release_id || "-"}` : "已发布 Release: -",
+        release ? `已发布 Release: ${release.id || "-"}` : "已发布 Release: -",
         release ? `已发布 Channel/Version: ${release.channel || "-"} / ${release.version || "-"}` : "已发布 Channel/Version: -",
         publishable ? "状态: 可发布 OTA" : "状态: 不可发布 OTA",
     ];
@@ -139,17 +139,17 @@ function renderSelectedJobStatus() {
 }
 
 function selectOtaJob(jobId) {
-    const job = otaJobs.find((item) => item.job_id === jobId);
+    const job = otaJobs.find((item) => item.id === jobId);
     if (!job) return;
 
-    currentJobId = job.job_id;
+    currentJobId = job.id;
     currentJob = job;
     const release = releaseForJob(job);
     applyReleaseUrls(release, job);
 
     const versionInput = document.getElementById("otaVersion");
     if (versionInput && !versionInput.value.trim()) {
-        versionInput.value = normalizeOtaVersionForInput(job.project_version);
+        versionInput.value = normalizeOtaVersionForInput(job.ota_project_version);
     }
     const publishBtn = document.getElementById("otaPublishBtn");
     if (publishBtn) publishBtn.disabled = !job.ota_publishable;
@@ -172,7 +172,7 @@ function syncCurrentOtaSelection() {
 }
 
 function jobStatusBadge(job) {
-    if (job.status !== "success") return '<span class="tag failed">构建失败</span>';
+    if (job.status !== "succeeded") return '<span class="tag failed">构建失败</span>';
     if (!job.ota_publishable) return '<span class="tag failed">不可发布</span>';
     if (releaseForJob(job)) return '<span class="tag success">已发布</span>';
     return '<span class="tag success">可发布</span>';
@@ -182,23 +182,23 @@ function renderOtaJobs() {
     const list = document.getElementById("otaJobsList");
     if (!list) return;
 
-    const successJobs = otaJobs.filter((job) => job.status === "success");
+    const successJobs = otaJobs.filter((job) => job.status === "succeeded");
     if (!successJobs.length) {
         list.innerHTML = '<div class="empty-state">暂无成功构建。请先在“远端编译”页面完成一次构建。</div>';
         return;
     }
 
     list.innerHTML = successJobs.map((job) => {
-        const selected = job.job_id === currentJobId ? " selected" : "";
+        const selected = job.id === currentJobId ? " selected" : "";
         const size = `${job.ota_app_size || 0} bytes`;
-        const version = normalizeOtaVersionForInput(job.project_version) || "-";
+        const version = normalizeOtaVersionForInput(job.ota_project_version) || "-";
         const project = job.project_name || "-";
         const target = job.target || "-";
         return `
-            <button class="list-row${selected}" type="button" onclick="selectOtaJob('${escapeHtml(job.job_id)}')">
+            <button class="list-row${selected}" type="button" onclick="selectOtaJob('${escapeHtml(job.id)}')">
                 <span>
                     <strong>${escapeHtml(project)}</strong>
-                    <small>${escapeHtml(job.job_id)} · ${escapeHtml(target)} · ${escapeHtml(job.created_at || "")}</small>
+                    <small>${escapeHtml(job.id)} · ${escapeHtml(target)} · ${escapeHtml(job.created_at || "")}</small>
                 </span>
                 <span class="row-meta">
                     <span>v${escapeHtml(version)}</span>
@@ -215,19 +215,19 @@ async function loadOtaJobs() {
     if (list) list.innerHTML = '<div class="empty-state">加载构建记录...</div>';
 
     try {
-        otaJobs = (await apiGet("/api/jobs")).filter(isEspFirmwareJob);
+        otaJobs = (await apiGet("/jobs?kind=esp")).filter(isEspFirmwareJob);
         renderOtaJobs();
 
         if (!currentJobId) {
-            const defaultJob = otaJobs.find((job) => job.status === "success" && job.ota_publishable);
+            const defaultJob = otaJobs.find((job) => job.status === "succeeded" && job.ota_publishable);
             if (defaultJob) {
-                selectOtaJob(defaultJob.job_id);
+                selectOtaJob(defaultJob.id);
                 return;
             }
         }
 
         if (currentJobId) {
-            const refreshed = otaJobs.find((job) => job.job_id === currentJobId);
+            const refreshed = otaJobs.find((job) => job.id === currentJobId);
             if (refreshed) {
                 currentJob = refreshed;
                 const release = releaseForJob(refreshed);
@@ -255,7 +255,7 @@ function renderReleaseResult(release) {
 
     box.innerHTML = `
         <div class="result-grid">
-            <div><span>Release ID</span><strong>${escapeHtml(release.release_id || "-")}</strong></div>
+            <div><span>Release ID</span><strong>${escapeHtml(release.id || "-")}</strong></div>
             <div><span>Channel</span><strong>${escapeHtml(release.channel || "-")}</strong></div>
             <div><span>Version</span><strong>${escapeHtml(release.version || "-")}</strong></div>
             <div><span>Firmware Size</span><strong>${escapeHtml(release.size || 0)} bytes</strong></div>
@@ -291,14 +291,14 @@ async function publishOtaRelease() {
     if (btn) btn.disabled = true;
 
     try {
-        const data = await apiPostJson("/api/ota/publish/" + currentJobId, buildOtaPayload());
+        const data = await apiPostJson("/ota/releases", {job_id: currentJobId, ...buildOtaPayload()});
         currentManifestUrl = data.manifest_url;
         currentManifestDirectUrl = data.manifest_direct_url;
         currentFirmwareUrl = data.firmware_url;
 
         setOtaStatus([
             "OTA 发布成功",
-            `Release ID: ${data.release_id}`,
+            `Release ID: ${data.id}`,
             `Latest Manifest URL: ${data.manifest_url}`,
             `Direct Manifest URL: ${data.manifest_direct_url}`,
             `Firmware URL: ${data.firmware_url}`,
@@ -386,7 +386,7 @@ function renderOtaReleases() {
     }
 
     body.innerHTML = otaReleases.map((release) => {
-        const releaseId = escapeHtml(release.release_id || "");
+        const releaseId = escapeHtml(release.id || "");
         const manifest = release.manifest_url
             ? `<a href="${escapeHtml(release.manifest_url)}" target="_blank">latest</a>`
             : "-";
@@ -414,7 +414,7 @@ function renderOtaReleases() {
 }
 
 async function deleteOtaRelease(releaseId) {
-    const release = otaReleases.find((item) => item.release_id === releaseId);
+    const release = otaReleases.find((item) => item.id === releaseId);
     const label = release
         ? `${release.channel || "-"} / ${release.project || "-"} / ${release.version || "-"}`
         : releaseId;
@@ -424,27 +424,20 @@ async function deleteOtaRelease(releaseId) {
     }
 
     try {
-        const data = await apiDelete("/api/ota/releases/" + encodeURIComponent(releaseId));
+        const data = await apiDelete("/ota/releases/" + encodeURIComponent(releaseId));
         await loadOtaReleases();
         await loadOtaJobs();
         syncCurrentOtaSelection();
 
-        const latest = data.latest || {};
-        const jobState = data.job_state || {};
-        const latestLine = latest.latest_release_id
-            ? `Latest 已回退到: ${latest.latest_release_id}`
+        const latestLine = data.latest_release_id
+            ? `Latest 已回退到: ${data.latest_release_id}`
             : "Latest 已清空";
-        const jobLine = jobState.job_exists === false
-            ? "原构建记录不存在，已跳过构建状态同步"
-            : jobState.published
-                ? `当前构建仍已发布: ${jobState.release_id || "-"}`
-                : "当前构建已回到可发布状态";
 
         setOtaStatus([
             "OTA Release 删除成功",
             `Deleted Release ID: ${data.deleted_release_id}`,
             latestLine,
-            jobLine,
+            "构建发布状态已同步",
         ].join("\n"), "success");
     } catch (err) {
         setOtaStatus(`删除 OTA Release 失败\n${err.message}`, "failed");
@@ -456,7 +449,7 @@ async function loadOtaReleases() {
     if (body) body.innerHTML = '<tr><td colspan="8">加载中...</td></tr>';
 
     try {
-        const data = await apiGet("/api/ota/releases");
+        const data = await apiGet("/ota/releases");
         otaReleases = data.releases || [];
         renderOtaReleases();
         syncCurrentOtaSelection();

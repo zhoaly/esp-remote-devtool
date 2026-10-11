@@ -146,7 +146,7 @@ function renderHomeRegistry(registry) {
 
 async function loadHomeRegistry() {
     try {
-        const registry = await apiGet("/api/home/tools");
+        const registry = await apiGet("/home/tools");
         renderHomeRegistry(registry);
     } catch (err) {
         setText("homeRegistryState", "failed");

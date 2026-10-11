@@ -9,6 +9,8 @@ HEIGHT="${5:-296}"
 LVGL_SOURCE_DIR="${6:-}"
 SDL2_PORT_DIR="${7:-}"
 EMSDK_CACHE_DIR="${8:-}"
+JOB_ID="${9:-manual}"
+CONTAINER_NAME="lvgl-build-${JOB_ID}"
 
 if [ ! -d "$PROJECT_DIR" ]; then
     echo "ERROR: project dir not found: $PROJECT_DIR"
@@ -36,6 +38,7 @@ echo "============================================"
 DOCKER_ARGS=(
     --rm
     -i
+    --name "$CONTAINER_NAME"
     --user "$(id -u):$(id -g)"
     -e HOME=/tmp
     -e LVGL_SIM_WIDTH="$WIDTH"

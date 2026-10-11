@@ -816,19 +816,19 @@ function reloadLvglPreview() {
 }
 
 function selectLvglPreviewJob(jobId) {
-    const job = lvglPreviewJobs.find((item) => item.job_id === jobId);
+    const job = lvglPreviewJobs.find((item) => item.id === jobId);
     if (!job || !job.preview_url) return;
 
-    currentJobId = job.job_id;
+    currentJobId = job.id;
     currentJob = job;
     setLvglPreviewDimensions(job);
     setLvglPreview(job.preview_url);
     renderLvglPreviewJobs();
 
-    setText("lvglPreviewJobCard", job.job_id);
+    setText("lvglPreviewJobCard", job.id);
     setText("lvglPreviewSize", lvglJobDimensions(job));
     setLvglPreviewStatus([
-        `已选择构建: ${job.job_id}`,
+        `已选择构建: ${job.id}`,
         `工程: ${job.project_name || "-"}`,
         `尺寸: ${lvglJobDimensions(job)}`,
         `创建时间: ${job.created_at || "-"}`
@@ -866,13 +866,13 @@ function renderLvglPreviewJobs() {
     }
 
     list.innerHTML = lvglPreviewJobs.map((job) => {
-        const selected = job.job_id === currentJobId ? " selected" : "";
+        const selected = job.id === currentJobId ? " selected" : "";
         const downloadName = job.artifact_name || "lvgl_preview.zip";
         return `
-            <button class="list-row${selected}" type="button" onclick="selectLvglPreviewJob('${lvglEscapeHtml(job.job_id)}')">
+            <button class="list-row${selected}" type="button" onclick="selectLvglPreviewJob('${lvglEscapeHtml(job.id)}')">
                 <span>
                     <strong>${lvglEscapeHtml(job.project_name || "-")}</strong>
-                    <small>${lvglEscapeHtml(job.job_id)} · ${lvglEscapeHtml(lvglJobDimensions(job))} · ${lvglEscapeHtml(job.created_at || "")}</small>
+                    <small>${lvglEscapeHtml(job.id)} · ${lvglEscapeHtml(lvglJobDimensions(job))} · ${lvglEscapeHtml(job.created_at || "")}</small>
                 </span>
                 <span class="row-meta">
                     <span>${lvglEscapeHtml(downloadName)}</span>
@@ -888,14 +888,14 @@ async function loadLvglPreviewJobs() {
     if (list) list.innerHTML = '<div class="empty-state">正在加载 LVGL 预览构建...</div>';
 
     try {
-        lvglPreviewJobs = (await apiGet("/api/lvgl/jobs")).filter(isLvglPreviewJob);
+        lvglPreviewJobs = (await apiGet("/jobs?kind=lvgl")).filter(isLvglPreviewJob);
         renderLvglPreviewJobs();
 
         const requestedJobId = previewJobFromQuery();
-        const requested = requestedJobId ? lvglPreviewJobs.find((job) => job.job_id === requestedJobId) : null;
+        const requested = requestedJobId ? lvglPreviewJobs.find((job) => job.id === requestedJobId) : null;
         const defaultJob = requested || lvglPreviewJobs[0];
         if (defaultJob) {
-            selectLvglPreviewJob(defaultJob.job_id);
+            selectLvglPreviewJob(defaultJob.id);
         }
     } catch (err) {
         if (list) list.innerHTML = `<div class="empty-state failed">加载 LVGL 构建失败：${lvglEscapeHtml(err.message)}</div>`;

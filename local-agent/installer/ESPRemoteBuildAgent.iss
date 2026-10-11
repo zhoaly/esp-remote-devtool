@@ -1,9 +1,9 @@
 #define AppName "ESP Remote Build Agent"
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.2.0"
 #endif
 #ifndef OutputBaseFilename
-  #define OutputBaseFilename "ESPRemoteBuildAgentSetup-0.1.0-x64"
+  #define OutputBaseFilename "ESPRemoteBuildAgentSetup-0.2.0-x64"
 #endif
 #define AppPublisher "zhoaly"
 #define AppExeName "ESPRemoteBuildAgent.exe"

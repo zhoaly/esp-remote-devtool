@@ -8,13 +8,13 @@ function lvglEscapeHtml(value) {
 }
 
 function isLvglPreviewJob(job) {
-    return job?.tool_type === "lvgl_simulator" && job.status === "success" && Boolean(job.preview_url);
+    return job?.kind === "lvgl" && job.status === "succeeded" && Boolean(job.preview_url);
 }
 
 function lvglStatusBadge(job) {
     const status = job?.status || "?";
-    const cls = status === "success" ? "tag success" : status === "failed" ? "tag failed" : "tag";
-    const label = status === "success" ? "成功" : status === "failed" ? "失败" : status;
+    const cls = status === "succeeded" ? "tag success" : status === "failed" ? "tag failed" : "tag";
+    const label = status === "succeeded" ? "成功" : status === "failed" ? "失败" : status;
     return `<span class="${cls}">${lvglEscapeHtml(label)}</span>`;
 }
 

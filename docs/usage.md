@@ -5,8 +5,10 @@
 3. Open the ESP toolset at `http://your-server:8000/tools/esp`.
 4. Enter the local ESP-IDF project path.
 5. Trigger remote build.
-6. Wait for the job to finish and inspect logs if needed.
+6. Wait while the job moves through `queued` and `running`; logs are loaded incrementally.
 7. Refresh COM ports and flash the packaged firmware.
+
+Queued or running jobs can be canceled through `/api/v2/jobs/{job_id}/cancel`. Failed, canceled, or interrupted jobs can be retried through `/api/v2/jobs/{job_id}/retry`; a retry has a new ID and preserves the original record.
 
 ## ESP page defaults
 

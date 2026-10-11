@@ -7,7 +7,6 @@ from pathlib import Path
 
 from PIL import Image
 
-
 PACKAGING_DIR = Path(__file__).resolve().parents[1] / "packaging"
 sys.path.insert(0, str(PACKAGING_DIR))
 

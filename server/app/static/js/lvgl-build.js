@@ -1,4 +1,5 @@
 let lvglWorkspaces = [];
+let lvglLogOffset = 0;
 let lvglBuildDefaults = getLvglSettings().build;
 
 function lvglSetStatus(text, type = "") {
@@ -93,7 +94,7 @@ function renderLvglWorkspaces(workspaces, preferredWorkspace = "") {
 
 async function loadLvglWorkspaces(preferredWorkspace = "") {
     try {
-        const data = await apiGet("/api/lvgl/workspaces");
+        const data = await apiGet("/workspaces?kind=lvgl");
         lvglWorkspaces = data.workspaces || [];
         const widthInput = document.getElementById("lvglWidth");
         const heightInput = document.getElementById("lvglHeight");
@@ -116,7 +117,7 @@ function setLvglLinks(job) {
 
     if (job?.preview_url) {
         const preview = document.createElement("a");
-        preview.href = lvglPreviewPageUrl(job.job_id);
+        preview.href = lvglPreviewPageUrl(job.id);
         preview.textContent = "在预览页面打开";
         area.appendChild(preview);
     }
@@ -145,6 +146,7 @@ async function startLvglBuild() {
     startBtn.disabled = true;
     stopPolling();
     currentJobId = null;
+    lvglLogOffset = 0;
     currentJob = null;
     setLvglLinks(null);
     setText("lvglJobIdCard", "启动中");
@@ -158,7 +160,7 @@ async function startLvglBuild() {
             const workspaceId = document.getElementById("lvglRemoteWorkspace").value;
             if (!workspaceId) throw new Error("请选择一个可用的 LVGL 远端工作区。");
             lvglSetStatus("正在请求远端工作区构建...");
-            data = await apiPostJson("/api/lvgl/build/workspace", {
+            data = await apiPostJson("/builds/lvgl/workspace", {
                 workspace_id: workspaceId,
                 project_name: document.getElementById("lvglProjectName").value.trim(),
                 width,
@@ -195,13 +197,15 @@ async function startLvglBuild() {
             data = agentResp.remote_response || {};
         }
 
-        currentJobId = data.job_id;
-        if (!currentJobId) throw new Error("远端构建 API 未返回 job_id。");
+        currentJobId = data.id;
+        if (!currentJobId) throw new Error("远端构建 API 未返回任务 ID。");
 
         setText("lvglJobIdCard", currentJobId);
         lvglSetStatus(`LVGL 构建已启动\nJob ID: ${currentJobId}`);
         await pollLvglJob();
-        pollTimer = setInterval(pollLvglJob, 3000);
+        if (currentJob && !["succeeded", "failed", "canceled", "interrupted"].includes(currentJob.status)) {
+            pollTimer = setInterval(pollLvglJob, 3000);
+        }
     } catch (err) {
         lvglSetStatus(`启动 LVGL 构建失败\n${err.message}`, "failed");
         setText("lvglJobIdCard", "错误");
@@ -213,22 +217,22 @@ async function pollLvglJob() {
     if (!currentJobId) return;
 
     try {
-        const job = await apiGet("/api/lvgl/jobs/" + currentJobId);
+        const job = await apiGet("/jobs/" + currentJobId);
         currentJob = job;
-        setText("lvglJobIdCard", job.job_id);
+        setText("lvglJobIdCard", job.id);
         lvglSetStatus([
-            `Job ID: ${job.job_id}`,
+            `Job ID: ${job.id}`,
             `状态: ${job.status}`,
             `消息: ${job.message || "-"}`,
             `工程: ${job.project_name || "-"}`,
             `尺寸: ${job.width || "-"} x ${job.height || "-"}`,
             `来源: ${job.source_mode || "-"}`
-        ].join("\n"), job.status === "success" ? "success" : job.status === "failed" ? "failed" : "");
+        ].join("\n"), job.status === "succeeded" ? "success" : job.status === "failed" ? "failed" : "");
 
         await refreshLvglLog();
         setLvglLinks(job);
 
-        if (job.status === "success" || job.status === "failed") {
+        if (["succeeded", "failed", "canceled", "interrupted"].includes(job.status)) {
             stopPolling();
             document.getElementById("lvglStartBtn").disabled = false;
         }
@@ -242,9 +246,12 @@ async function refreshLvglLog() {
     if (!currentJobId) return;
 
     try {
-        const text = await apiGetText("/api/lvgl/logs/" + currentJobId);
+        const chunk = await apiGetLogChunk(currentJobId, lvglLogOffset);
         const box = document.getElementById("lvglLogBox");
-        box.textContent = text || "暂无构建日志。";
+        if (lvglLogOffset === 0) box.textContent = "";
+        box.textContent += chunk.content;
+        lvglLogOffset = chunk.next_offset;
+        if (!box.textContent) box.textContent = "暂无构建日志。";
         box.scrollTop = box.scrollHeight;
     } catch {
     }

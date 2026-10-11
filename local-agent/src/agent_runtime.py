@@ -7,10 +7,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 import uvicorn
-
 from agent_app import create_app
 from config import AgentSettings, load_settings
-
 
 LOGGER = logging.getLogger(__name__)
 

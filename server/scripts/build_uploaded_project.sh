@@ -5,6 +5,8 @@ PROJECT_DIR="$1"
 PROJECT_NAME="${2:-ESP32_S3_wifi_ble_hub}"
 IDF_IMAGE="${3:-espressif/idf:v6.0.1}"
 TARGET="${4:-esp32s3}"
+JOB_ID="${5:-manual}"
+CONTAINER_NAME="esp-build-${JOB_ID}"
 
 if [ ! -d "$PROJECT_DIR" ]; then
     echo "ERROR: project dir not found: $PROJECT_DIR"
@@ -30,6 +32,7 @@ rm -rf build
 
 echo "[2/4] Build project"
 docker run --rm -i \
+    --name "$CONTAINER_NAME" \
     --user "$(id -u):$(id -g)" \
     -e HOME=/tmp \
     -e IDF_GIT_SAFE_DIR='*' \
@@ -40,6 +43,7 @@ docker run --rm -i \
 
 echo "[3/4] Merge firmware"
 docker run --rm -i \
+    --name "$CONTAINER_NAME" \
     --user "$(id -u):$(id -g)" \
     -e HOME=/tmp \
     -e IDF_GIT_SAFE_DIR='*' \

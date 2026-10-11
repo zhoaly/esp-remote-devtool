@@ -17,7 +17,7 @@ function updateFlashButtonState() {
 
 function renderSelectedFlashJobStatus(job) {
     setFlashStatus([
-        `已选择构建: ${job.job_id}`,
+        `已选择构建: ${job.id}`,
         `项目: ${job.project_name || "-"}`,
         `Target: ${job.target || "-"}`,
         `Artifact: ${currentDownloadUrl}`,
@@ -27,10 +27,10 @@ function renderSelectedFlashJobStatus(job) {
 }
 
 function selectFlashJob(jobId) {
-    const job = flashJobs.find((item) => item.job_id === jobId);
+    const job = flashJobs.find((item) => item.id === jobId);
     if (!job || !job.download_url) return;
 
-    currentJobId = job.job_id;
+    currentJobId = job.id;
     currentJob = job;
     currentDownloadUrl = REMOTE_BASE + job.download_url;
 
@@ -40,7 +40,7 @@ function selectFlashJob(jobId) {
 }
 
 function flashJobStatusBadge(job) {
-    if (job.status !== "success") return '<span class="tag failed">构建失败</span>';
+    if (job.status !== "succeeded") return '<span class="tag failed">构建失败</span>';
     if (!job.download_url) return '<span class="tag failed">无产物</span>';
     return '<span class="tag success">可烧录</span>';
 }
@@ -49,7 +49,7 @@ function renderFlashJobs() {
     const list = document.getElementById("flashJobsList");
     if (!list) return;
 
-    const jobs = flashJobs.filter((job) => job.status === "success" && job.download_url);
+    const jobs = flashJobs.filter((job) => job.status === "succeeded" && job.download_url);
     if (!jobs.length) {
         currentJobId = null;
         currentJob = null;
@@ -60,15 +60,15 @@ function renderFlashJobs() {
     }
 
     list.innerHTML = jobs.map((job) => {
-        const selected = job.job_id === currentJobId ? " selected" : "";
+        const selected = job.id === currentJobId ? " selected" : "";
         const project = job.project_name || "-";
         const target = job.target || "-";
         const artifactName = job.artifact_name || "firmware.zip";
         return `
-            <button class="list-row${selected}" type="button" onclick="selectFlashJob('${flashEscapeHtml(job.job_id)}')">
+            <button class="list-row${selected}" type="button" onclick="selectFlashJob('${flashEscapeHtml(job.id)}')">
                 <span>
                     <strong>${flashEscapeHtml(project)}</strong>
-                    <small>${flashEscapeHtml(job.job_id)} · ${flashEscapeHtml(target)} · ${flashEscapeHtml(job.created_at || "")}</small>
+                    <small>${flashEscapeHtml(job.id)} · ${flashEscapeHtml(target)} · ${flashEscapeHtml(job.created_at || "")}</small>
                 </span>
                 <span class="row-meta">
                     <span>${flashEscapeHtml(artifactName)}</span>
@@ -84,16 +84,16 @@ async function loadFlashJobs() {
     if (list) list.innerHTML = '<div class="empty-state">加载构建记录...</div>';
 
     try {
-        flashJobs = (await apiGet("/api/jobs")).filter(isEspFirmwareJob);
+        flashJobs = (await apiGet("/jobs?kind=esp")).filter(isEspFirmwareJob);
         renderFlashJobs();
 
         const refreshed = currentJobId
-            ? flashJobs.find((job) => job.job_id === currentJobId && job.status === "success" && job.download_url)
+            ? flashJobs.find((job) => job.id === currentJobId && job.status === "succeeded" && job.download_url)
             : null;
-        const defaultJob = refreshed || flashJobs.find((job) => job.status === "success" && job.download_url);
+        const defaultJob = refreshed || flashJobs.find((job) => job.status === "succeeded" && job.download_url);
 
         if (defaultJob) {
-            selectFlashJob(defaultJob.job_id);
+            selectFlashJob(defaultJob.id);
         }
     } catch (err) {
         if (list) list.innerHTML = `<div class="empty-state failed">加载构建记录失败：${flashEscapeHtml(err.message)}</div>`;

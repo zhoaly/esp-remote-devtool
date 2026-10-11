@@ -8,9 +8,7 @@ import shutil
 from pathlib import Path
 
 import esptool
-
 from flash_helper import download_artifact_zip, extract_artifact
-
 
 FLASH_TIMEOUT_SECONDS = 180
 

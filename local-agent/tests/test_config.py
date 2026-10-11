@@ -8,7 +8,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
@@ -26,7 +25,7 @@ class ConfigTests(unittest.TestCase):
             ):
                 saved_path = config.save_user_settings(
                     {
-                        "remote_build_url": "https://build.example/api/build/upload/",
+                        "remote_build_url": "https://build.example/api/v2/builds/esp/upload/",
                         "default_project_name": "demo",
                         "default_idf_image": "espressif/idf:v6.0.1",
                         "default_target": "esp32s3",
@@ -34,10 +33,10 @@ class ConfigTests(unittest.TestCase):
                 )
                 settings = config.load_settings()
 
-            self.assertEqual(saved_path, config_path)
+            self.assertEqual(saved_path, config_path.resolve())
             self.assertEqual(
                 settings.remote_build_url,
-                "https://build.example/api/build/upload",
+                "https://build.example/api/v2/builds/esp/upload",
             )
             self.assertEqual(settings.host, "127.0.0.1")
             self.assertEqual(settings.port, 8765)
@@ -47,17 +46,17 @@ class ConfigTests(unittest.TestCase):
 
     def test_invalid_remote_url_is_rejected(self) -> None:
         with self.assertRaises(ValueError):
-            config.validate_remote_build_url("build.example/api/build/upload")
+            config.validate_remote_build_url("build.example/api/v2/builds/esp/upload")
 
     def test_remote_urls_are_derived_from_upload_origin(self) -> None:
-        upload_url = "https://build.example:8443/api/build/upload"
+        upload_url = "https://build.example:8443/api/v2/builds/esp/upload"
         self.assertEqual(
             config.derive_remote_ui_url(upload_url),
             "https://build.example:8443/tools/esp",
         )
         self.assertEqual(
             config.derive_remote_info_url(upload_url),
-            "https://build.example:8443/api/info",
+            "https://build.example:8443/api/v2/info",
         )
 
 

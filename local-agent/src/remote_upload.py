@@ -47,12 +47,10 @@ def upload_project_zip(
 
 
 def derive_lvgl_build_url(remote_build_url: str) -> str:
-    if remote_build_url.endswith("/api/build/upload"):
-        return remote_build_url[: -len("/api/build/upload")] + "/api/lvgl/build/upload"
     parsed = urlparse(remote_build_url)
     if parsed.scheme and parsed.netloc:
-        return urlunparse((parsed.scheme, parsed.netloc, "/api/lvgl/build/upload", "", "", ""))
-    return "/api/lvgl/build/upload"
+        return urlunparse((parsed.scheme, parsed.netloc, "/api/v2/builds/lvgl/upload", "", "", ""))
+    return "/api/v2/builds/lvgl/upload"
 
 
 def upload_lvgl_project_zip(
@@ -99,7 +97,7 @@ def upload_lvgl_ui_package_zip(
     height: int,
 ) -> dict[str, Any]:
     parsed = urlparse(derive_lvgl_build_url(remote_build_url))
-    lvgl_ui_build_url = urlunparse((parsed.scheme, parsed.netloc, "/api/lvgl/build/ui-upload", "", "", ""))
+    lvgl_ui_build_url = urlunparse((parsed.scheme, parsed.netloc, "/api/v2/builds/lvgl/ui-upload", "", "", ""))
 
     with open(zip_path, "rb") as file_handle:
         files = {"file": (zip_path, file_handle, "application/zip")}

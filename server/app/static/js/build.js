@@ -5,6 +5,7 @@ let idfImageConfig = {
     allowed_idf_images: ["espressif/idf:v6.0.1"],
     allow_custom: true,
 };
+let buildLogOffset = 0;
 
 function uniqueValues(values) {
     const seen = new Set();
@@ -149,7 +150,7 @@ function renderWorkspaces(workspaces, preferredWorkspace = "", preferredImage = 
 
 async function loadIdfImages(preferredImage = "") {
     try {
-        idfImageConfig = await apiGet("/api/idf-images");
+        idfImageConfig = await apiGet("/config/esp");
         renderIdfImageOptions(preferredImage || idfImageConfig.default_idf_image);
     } catch (err) {
         document.getElementById("idfImageHint").textContent = `加载 IDF 版本列表失败: ${err.message}`;
@@ -159,7 +160,7 @@ async function loadIdfImages(preferredImage = "") {
 
 async function loadWorkspaces(preferredWorkspace = "", preferredImage = "") {
     try {
-        const data = await apiGet("/api/workspaces");
+        const data = await apiGet("/workspaces?kind=esp");
         remoteWorkspaces = data.workspaces || [];
         renderWorkspaces(remoteWorkspaces, preferredWorkspace, preferredImage);
     } catch (err) {
@@ -179,6 +180,7 @@ async function startBuild() {
             stopPolling();
 
             currentJobId = null;
+            buildLogOffset = 0;
             currentDownloadUrl = null;
             currentJob = null;
             currentManifestUrl = null;
@@ -200,7 +202,7 @@ async function startBuild() {
                     document.getElementById("buildLogBox").textContent = "准备调用远端工作区构建接口...";
                     setBuildStatus("正在请求远端 Server 直接从固定工作区构建...");
 
-                    resp = { ok: true, json: async () => await apiPostJson("/api/build/workspace", { workspace_id: workspaceId, idf_image: idfImage }) };
+                    resp = { ok: true, json: async () => await apiPostJson("/builds/esp/workspace", { workspace_id: workspaceId, idf_image: idfImage }) };
                     successMessage = "远端工作区构建已启动，开始轮询远端构建状态...";
                 } else {
                     document.getElementById("buildLogBox").textContent = "准备调用本地 Agent...";
@@ -223,13 +225,13 @@ async function startBuild() {
 
                 const data = await resp.json();
                 currentJobId = sourceMode === "remote_workspace"
-                    ? data.job_id
-                    : data.remote_response?.job_id;
+                    ? data.id
+                    : data.remote_response?.id;
 
                 if (!currentJobId) {
                     throw new Error(sourceMode === "remote_workspace"
-                        ? "远端 Server 返回中缺少 job_id"
-                        : "本地 Agent 返回中缺少 remote_response.job_id");
+                        ? "远端 Server 返回中缺少任务 ID"
+                        : "本地 Agent 返回中缺少 remote_response.id");
                 }
 
                 document.getElementById("jobIdCard").textContent = currentJobId;
@@ -239,7 +241,9 @@ async function startBuild() {
                 ].join("\n"));
 
                 await pollJob();
-                pollTimer = setInterval(pollJob, 3000);
+                if (currentJob && !["succeeded", "failed", "canceled", "interrupted"].includes(currentJob.status)) {
+                    pollTimer = setInterval(pollJob, 3000);
+                }
             } catch (err) {
                 setBuildStatus(`启动构建失败\n${err.message}`, "failed");
                 document.getElementById("jobIdCard").textContent = "error";
@@ -251,21 +255,21 @@ async function pollJob() {
             if (!currentJobId) return;
 
             try {
-                const job = await apiGet("/api/jobs/" + currentJobId);
+                const job = await apiGet("/jobs/" + currentJobId);
                 currentJob = job;
-                document.getElementById("jobIdCard").textContent = job.job_id;
+                document.getElementById("jobIdCard").textContent = job.id;
                 setBuildStatus([
-                    `Job ID: ${job.job_id}`,
+                    `Job ID: ${job.id}`,
                     `状态: ${job.status}`,
                     `消息: ${job.message}`,
                     `项目: ${job.project_name}`,
                     `Target: ${job.target}`,
                     `IDF Image: ${job.idf_image}`
-                ].join("\n"), job.status === "success" ? "success" : job.status === "failed" ? "failed" : "");
+                ].join("\n"), job.status === "succeeded" ? "success" : job.status === "failed" ? "failed" : "");
 
                 refreshBuildLog();
 
-                if (job.status === "success") {
+                if (job.status === "succeeded") {
                     stopPolling();
                     currentDownloadUrl = REMOTE_BASE + job.download_url;
                     setLinks(job.download_url, job.log_url);
@@ -275,7 +279,7 @@ async function pollJob() {
                     if (typeof refreshSerialPorts === "function") refreshSerialPorts();
                 }
 
-                if (job.status === "failed") {
+                if (["failed", "canceled", "interrupted"].includes(job.status)) {
                     stopPolling();
                     setLinks(null, job.log_url);
                     document.getElementById("startBtn").disabled = false;
@@ -292,9 +296,12 @@ async function refreshBuildLog() {
             if (!currentJobId) return;
 
             try {
-                const text = await apiGetText("/api/logs/" + currentJobId);
+                const chunk = await apiGetLogChunk(currentJobId, buildLogOffset);
                 const box = document.getElementById("buildLogBox");
-                box.textContent = text || "暂无构建日志。";
+                if (buildLogOffset === 0) box.textContent = "";
+                box.textContent += chunk.content;
+                buildLogOffset = chunk.next_offset;
+                if (!box.textContent) box.textContent = "暂无构建日志。";
                 box.scrollTop = box.scrollHeight;
             } catch {
             }

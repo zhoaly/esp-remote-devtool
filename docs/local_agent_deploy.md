@@ -2,7 +2,7 @@
 
 ## Recommended Windows installation
 
-1. Run `release/ESPRemoteBuildAgentSetup-0.1.0-x64.exe`.
+1. Run `release/ESPRemoteBuildAgentSetup-0.2.0-x64.exe`.
 2. Keep **Start with Windows** unchecked unless the workstation should always expose
    the local Agent.
 3. Launch **ESP Remote Build Agent** from the desktop or Start menu.
@@ -30,3 +30,5 @@ check that another process is not already using that port.
 
 The source workflow continues to read `local-agent/config.json`. Settings saved by
 the packaged tray application take precedence from LocalAppData.
+
+For V2, `remote_build_url` must end with `/api/v2/builds/esp/upload`. The Agent derives the LVGL upload and server information URLs from the same origin.

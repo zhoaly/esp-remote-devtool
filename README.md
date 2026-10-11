@@ -1,11 +1,13 @@
-# ESP Remote Build Flash
+# ESP Remote Build Flash 0.2.0
 
 A web-based ESP-IDF remote build and local flash tool.
 
 ## Features
 
 - Upload a local ESP-IDF project from Windows through a local agent
-- Build the project remotely inside an ESP-IDF Docker environment
+- Persist build jobs in SQLite and execute them through an independent FIFO worker
+- Build ESP-IDF and LVGL projects remotely inside Docker
+- Cancel, retry, and recover queued jobs across API or worker restarts
 - Package merged firmware and related flashing artifacts
 - Download remote build artifacts and inspect build logs
 - Enumerate local COM ports on Windows
@@ -22,7 +24,7 @@ release/      Release output placeholder
 
 ## Architecture
 
-The browser talks to the remote server for job management and to the local Windows agent for local filesystem access and serial flashing. The remote server never reads the Windows filesystem directly.
+The browser talks to the remote API for job management and to the local Windows agent for local filesystem access and serial flashing. The API writes jobs to SQLite; an independent worker claims and runs them. All public server endpoints use `/api/v2`.
 
 ## Quick Start
 
@@ -34,6 +36,8 @@ cd server
 cp .env.example .env
 ./start_server.sh
 ```
+
+`start_server.sh` runs `alembic upgrade head`, then starts both the API and worker. Python 3.10 or newer is required for the server.
 
 ### Local Agent
 
