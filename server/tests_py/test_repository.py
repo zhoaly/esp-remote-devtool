@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from app.core.errors import ConflictError
@@ -8,7 +9,7 @@ from app.domain.jobs import JobKind, JobStatus, SourceMode
 from app.storage.repositories import JobRepository
 
 
-def create_job(repository: JobRepository, settings, name: str):
+def create_job(repository: JobRepository, settings, name: str, job_id: str | None = None):
     return repository.create(
         kind=JobKind.ESP,
         source_mode=SourceMode.WORKSPACE.value,
@@ -21,6 +22,7 @@ def create_job(repository: JobRepository, settings, name: str):
             "workspace_path": str(settings.workspace_dir),
         },
         log_path=str(settings.log_dir / f"{name}.log"),
+        job_id=job_id,
     )
 
 
@@ -43,6 +45,21 @@ def test_fifo_claim_and_invalid_transition(database, settings) -> None:
         running = jobs.get(first_id)
         with pytest.raises(ConflictError):
             jobs.transition(running, JobStatus.QUEUED, "invalid")
+
+
+@pytest.mark.parametrize("clock_delta", [0, -1])
+def test_fifo_follows_insert_order_when_timestamps_tie_or_reverse(database, settings, clock_delta):
+    _, factory = database
+    with factory.begin() as session:
+        jobs = JobRepository(session)
+        first = create_job(jobs, settings, "first", job_id="z-first")
+        second = create_job(jobs, settings, "second", job_id="a-second")
+        first.created_at = datetime(2026, 11, 4, tzinfo=timezone.utc)
+        second.created_at = first.created_at + timedelta(seconds=clock_delta)
+    with factory.begin() as session:
+        assert JobRepository(session).claim_next().id == "z-first"
+    with factory.begin() as session:
+        assert JobRepository(session).claim_next().id == "a-second"
 
 
 def test_recovery_interrupts_only_running_jobs(database, settings) -> None:

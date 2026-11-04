@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, literal_column, select, update
 from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, NotFoundError
@@ -78,7 +78,10 @@ class JobRepository:
         candidate_id = self.session.scalar(
             select(JobRecord.id)
             .where(JobRecord.status == JobStatus.QUEUED.value)
-            .order_by(JobRecord.created_at.asc(), JobRecord.id.asc())
+            # SQLite's insertion order is stable when low-resolution Windows
+            # clocks tie, and when the wall clock moves backwards. UUIDs are
+            # identifiers, not a FIFO tie breaker.
+            .order_by(literal_column("jobs.rowid").asc())
             .limit(1)
         )
         if candidate_id is None:
