@@ -1,135 +1,107 @@
 from __future__ import annotations
 
+import csv
+import json
+import sys
 import zipfile
-from dataclasses import replace
 from pathlib import Path
 
+import pytest
+from app.builders.process import ProcessRunner
 from app.domain.jobs import JobKind, JobStatus, SourceMode
 from app.services.worker import BuildWorker
 from app.storage.repositories import ArtifactRepository, JobRepository
 
 
-def write_zip(path: Path, files: dict[str, str]) -> None:
-    with zipfile.ZipFile(path, "w") as archive:
-        for name, content in files.items():
-            archive.writestr(name, content)
-
-
-def write_executable(path: Path, content: str) -> None:
-    path.write_text(content, encoding="utf-8")
-    path.chmod(0o755)
-
-
-def test_real_esp_builder_with_fake_processes(settings, database, tmp_path: Path) -> None:
-    build_script = tmp_path / "fake-esp-build.sh"
-    package_script = tmp_path / "fake-package.sh"
-    write_executable(
-        build_script,
-        """#!/usr/bin/env bash
-set -euo pipefail
-mkdir -p "$1/build/bootloader" "$1/build/partition_table"
-printf app > "$1/build/demo.bin"
-printf merged > "$1/build/firmware_merged.bin"
-printf boot > "$1/build/bootloader/bootloader.bin"
-printf partition > "$1/build/partition_table/partition-table.bin"
-printf '{}' > "$1/build/flasher_args.json"
-printf '{"project_name":"demo","app_bin":"demo.bin","project_version":"1.2.3"}' > "$1/build/project_description.json"
+@pytest.fixture()
+def fake_docker(tmp_path, monkeypatch):
+    script = tmp_path / "fake_docker.py"
+    script.write_text(
+        """import csv, json, pathlib, sys
+args = sys.argv[1:]
+mounts = {}
+for index, arg in enumerate(args):
+    if arg == "--mount":
+        fields = dict(item.split("=", 1) for item in next(csv.reader([args[index+1]])) if "=" in item)
+        mounts[fields["target"]] = pathlib.Path(fields["source"])
+project = mounts["/project"]
+(project / "docker-arguments.json").write_text(json.dumps(args), encoding="utf-8")
+if "/out" in mounts:
+    (mounts["/out"] / "index.html").write_text("<html>preview</html>", encoding="utf-8")
+    (mounts["/out"] / "index.wasm").write_bytes(b"wasm")
+else:
+    build = project / "build"
+    (build / "bootloader").mkdir(parents=True)
+    (build / "partition_table").mkdir()
+    for name in ("demo.bin", "firmware_merged.bin", "bootloader/bootloader.bin", "partition_table/partition-table.bin"):
+        (build / name).write_bytes(b"firmware")
+    (build / "flasher_args.json").write_text("{}", encoding="utf-8")
+    (build / "project_description.json").write_text(json.dumps({"project_name":"demo", "app_bin":"demo.bin", "project_version":"1.2.3"}), encoding="utf-8")
 """,
+        encoding="utf-8",
     )
-    write_executable(
-        package_script,
-        """#!/usr/bin/env bash
-set -euo pipefail
-mkdir -p "$2"
-printf package > "$2/${3}_${4}_firmware.zip"
-echo "$2/${3}_${4}_firmware.zip"
-""",
-    )
-    worker_settings = replace(
-        settings,
-        build_script=build_script,
-        package_script=package_script,
-        esp_build_timeout_seconds=10,
-    )
-    upload = settings.upload_dir / "esp.zip"
-    write_zip(
-        upload,
-        {
-            "demo/CMakeLists.txt": "cmake_minimum_required(VERSION 3.16)",
-            "demo/main/main.c": "int main(void) { return 0; }",
-        },
-    )
+    original = ProcessRunner.run
+
+    def run(self, command, *args, **kwargs):
+        return original(self, [sys.executable, str(script), *command[1:]], *args, **kwargs)
+
+    monkeypatch.setattr(ProcessRunner, "run", run)
+    monkeypatch.setattr(ProcessRunner, "cleanup_container", staticmethod(lambda _: None))
+
+
+@pytest.mark.parametrize("kind", [JobKind.ESP, JobKind.LVGL])
+def test_builder_uses_docker_and_python_packaging(settings, database, fake_docker, kind):
+    upload = settings.upload_dir / "source.zip"
+    with zipfile.ZipFile(upload, "w") as archive:
+        archive.writestr(
+            "工程 with spaces,comma/CMakeLists.txt", "cmake_minimum_required(VERSION 3.16)"
+        )
+        archive.writestr("工程 with spaces,comma/main/main.c", "int main(void) { return 0; }")
     _, factory = database
+    configuration = {"kind": kind.value, "project_name": "demo"}
+    if kind == JobKind.ESP:
+        configuration.update(target="esp32s3", idf_image=settings.default_idf_image)
+    else:
+        configuration.update(width=320, height=240, lvgl_version="9.x")
     with factory.begin() as session:
-        record = JobRepository(session).create(
-            kind=JobKind.ESP,
+        job = JobRepository(session).create(
+            kind=kind,
             source_mode=SourceMode.UPLOAD.value,
             project_name="demo",
-            request_json={
-                "kind": "esp",
-                "project_name": "demo",
-                "target": "esp32s3",
-                "idf_image": settings.default_idf_image,
-            },
-            upload_path=str(upload),
-            workspace_path=str(settings.workspace_dir / "esp-e2e"),
-            log_path=str(settings.log_dir / "esp-e2e.log"),
+            request_json=configuration,
+            upload_path=settings.stored_path(upload),
+            workspace_path=f"workspaces/{kind.value}-test",
+            log_path=f"logs/{kind.value}.log",
         )
-        job_id = record.id
-
-    assert BuildWorker(worker_settings, factory).run_once()
+        job_id = job.id
+    assert BuildWorker(settings, factory).run_once()
     with factory() as session:
         job = JobRepository(session).get(job_id)
-        artifacts = ArtifactRepository(session).list_for_job(job_id)
-        assert job.status == JobStatus.SUCCEEDED.value
-        assert job.result_json["ota_project_version"] == "1.2.3"
-        assert artifacts[0].filename == f"demo_{job_id}_firmware.zip"
-    log = (settings.log_dir / "esp-e2e.log").read_text(encoding="utf-8")
-    assert settings.default_idf_image in log
-    assert "esp32s3" in log
-
-
-def test_real_lvgl_builder_with_fake_process(settings, database, tmp_path: Path) -> None:
-    build_script = tmp_path / "fake-lvgl-build.sh"
-    write_executable(
-        build_script,
-        """#!/usr/bin/env bash
-set -euo pipefail
-mkdir -p "$2"
-printf '<html><body>preview</body></html>' > "$2/index.html"
-""",
+        assert job.status == JobStatus.SUCCEEDED.value, job.error_message
+        artifact = ArtifactRepository(session).list_for_job(job_id)[0]
+        assert not Path(artifact.path).is_absolute()
+        with zipfile.ZipFile(settings.resolve_path(artifact.path)) as archive:
+            if kind == JobKind.ESP:
+                info = json.loads(archive.read("ota_info.json"))
+                assert info["chip"] == "esp32s3"
+                assert info["size"] == len(b"firmware")
+                assert "firmware_merged.sha256" in archive.namelist()
+                assert job.result_json["ota_project_version"] == "1.2.3"
+                assert not Path(job.result_json["_ota_app_path"]).is_absolute()
+            else:
+                assert archive.read("index.wasm") == b"wasm"
+    arguments = json.loads(
+        next(
+            (settings.workspace_dir / f"{kind.value}-test").rglob("docker-arguments.json")
+        ).read_text(encoding="utf-8")
     )
-    worker_settings = replace(
-        settings,
-        lvgl_build_script=build_script,
-        lvgl_build_timeout_seconds=10,
-    )
-    upload = settings.upload_dir / "lvgl.zip"
-    write_zip(upload, {"demo/CMakeLists.txt": "cmake_minimum_required(VERSION 3.16)"})
-    _, factory = database
-    with factory.begin() as session:
-        record = JobRepository(session).create(
-            kind=JobKind.LVGL,
-            source_mode=SourceMode.UPLOAD.value,
-            project_name="lvgl-demo",
-            request_json={
-                "kind": "lvgl",
-                "project_name": "lvgl-demo",
-                "width": 320,
-                "height": 240,
-                "lvgl_version": "9.x",
-            },
-            upload_path=str(upload),
-            workspace_path=str(settings.workspace_dir / "lvgl-e2e"),
-            log_path=str(settings.log_dir / "lvgl-e2e.log"),
-        )
-        job_id = record.id
-
-    assert BuildWorker(worker_settings, factory).run_once()
-    with factory() as session:
-        job = JobRepository(session).get(job_id)
-        artifacts = ArtifactRepository(session).list_for_job(job_id)
-        assert job.status == JobStatus.SUCCEEDED.value
-        assert job.result_json["preview_url"].endswith("/preview/index.html")
-        assert artifacts[0].filename.endswith("_lvgl_preview.zip")
-    assert (settings.lvgl_preview_dir / job_id / "index.html").is_file()
+    mounts = [
+        next(csv.reader([arguments[i + 1]]))
+        for i, value in enumerate(arguments)
+        if value == "--mount"
+    ]
+    assert any("target=/project" in mount for mount in mounts)
+    assert "bash" in arguments  # Bash is a container command, never the host executable.
+    if kind == JobKind.ESP:
+        assert "IDF_TARGET=esp32s3" in arguments
+        assert settings.default_idf_image in arguments

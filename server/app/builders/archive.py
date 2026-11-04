@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 import stat
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from app.core.config import Settings
 
@@ -27,8 +27,35 @@ def safe_extract_zip(zip_path: Path, destination: Path, settings: Settings) -> N
             raise ArchiveValidationError("Archive contains too many entries")
 
         total_size = 0
+        seen: set[str] = set()
         validated: list[tuple[zipfile.ZipInfo, Path]] = []
         for member in members:
+            name = member.filename.replace("\\", "/")
+            parts = PurePosixPath(name).parts
+            if (
+                PureWindowsPath(name).drive
+                or name.startswith("/")
+                or any(
+                    part in {"..", "."}
+                    or ":" in part
+                    or part.endswith((".", " "))
+                    or part.split(".")[0].upper()
+                    in {
+                        "CON",
+                        "PRN",
+                        "AUX",
+                        "NUL",
+                        *(f"COM{i}" for i in range(1, 10)),
+                        *(f"LPT{i}" for i in range(1, 10)),
+                    }
+                    for part in parts
+                )
+            ):
+                raise ArchiveValidationError(f"Unsafe archive path: {member.filename}")
+            canonical = name.rstrip("/").casefold()
+            if canonical in seen:
+                raise ArchiveValidationError(f"Duplicate archive path: {member.filename}")
+            seen.add(canonical)
             mode = member.external_attr >> 16
             if stat.S_ISLNK(mode):
                 raise ArchiveValidationError(f"Archive links are not allowed: {member.filename}")
@@ -36,9 +63,11 @@ def safe_extract_zip(zip_path: Path, destination: Path, settings: Settings) -> N
                 raise ArchiveValidationError(f"Archive entry is too large: {member.filename}")
             total_size += member.file_size
             if total_size > settings.max_archive_uncompressed_size:
-                raise ArchiveValidationError("Archive uncompressed size exceeds the configured limit")
+                raise ArchiveValidationError(
+                    "Archive uncompressed size exceeds the configured limit"
+                )
 
-            target = (root / member.filename).resolve()
+            target = (root / name).resolve()
             if target != root and root not in target.parents:
                 raise ArchiveValidationError(f"Unsafe archive path: {member.filename}")
             validated.append((member, target))

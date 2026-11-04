@@ -36,3 +36,12 @@ def test_safe_extract_writes_valid_archive(settings, tmp_path: Path) -> None:
     destination = tmp_path / "output"
     safe_extract_zip(archive, destination, settings)
     assert (destination / "project" / "main" / "source.c").is_file()
+
+
+@pytest.mark.parametrize("name", ["C:/escape.txt", "file.txt:stream", "folder/CON.txt", r"..\escape.txt"])
+def test_archive_rejects_platform_dependent_paths(settings, tmp_path, name):
+    archive = tmp_path / "unsafe.zip"
+    with zipfile.ZipFile(archive, "w") as handle:
+        handle.writestr(name, "unsafe")
+    with pytest.raises(ArchiveValidationError, match="Unsafe archive path"):
+        safe_extract_zip(archive, tmp_path / "out", settings)

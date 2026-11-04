@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import time
 import traceback
-from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -79,7 +78,7 @@ class BuildWorker:
                             job_id=job_id,
                             kind=spec.kind,
                             filename=spec.path.name,
-                            path=str(spec.path.resolve()),
+                            path=self.settings.stored_path(spec.path),
                             media_type=spec.media_type,
                             size=spec.path.stat().st_size,
                             sha256=sha256_file(spec.path),
@@ -157,9 +156,9 @@ class BuildWorker:
     def _append_failure(self, job_id: str, exc: Exception) -> None:
         with self.session_factory() as session:
             record = JobRepository(session).get(job_id)
-            path = Path(record.log_path)
+            path = self.settings.resolve_path(record.log_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as log:
+        with path.open("a", encoding="utf-8", newline="\n") as log:
             log.write("\n========== BUILD FAILED ==========\n")
             log.write("".join(traceback.format_exception_only(type(exc), exc)))
             log.write("==================================\n")

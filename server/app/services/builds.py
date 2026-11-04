@@ -57,7 +57,7 @@ class BuildSubmissionService:
                 workspace_id=payload.workspace_id,
             )
         request_json = config.model_dump()
-        request_json["workspace_path"] = workspace_path
+        request_json["workspace_path"] = self.settings.stored_path(Path(workspace_path))
         return self._create_job(kind, SourceMode.WORKSPACE, config.project_name, request_json)
 
     async def submit_upload(
@@ -89,8 +89,8 @@ class BuildSubmissionService:
                 configuration.project_name,
                 configuration.model_dump(),
                 job_id=job_id,
-                upload_path=str(upload_path),
-                workspace_path=str(workspace_path),
+                upload_path=self.settings.stored_path(upload_path),
+                workspace_path=self.settings.stored_path(workspace_path),
             )
         except Exception:
             upload_path.unlink(missing_ok=True)
@@ -115,7 +115,7 @@ class BuildSubmissionService:
             source_mode=source_mode.value,
             project_name=project_name,
             request_json=request_json,
-            log_path=str(self.settings.log_dir / f"{actual_id}.log"),
+            log_path=self.settings.stored_path(self.settings.log_dir / f"{actual_id}.log"),
             upload_path=upload_path,
             workspace_path=workspace_path,
             retry_of_job_id=retry_of_job_id,

@@ -4,12 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import signal
 import socket
 import sys
 import threading
-from typing import Optional
-
 
 BUFFER_SIZE = 65536
 stop_event = threading.Event()
@@ -36,7 +35,7 @@ def relay(src: socket.socket, dst: socket.socket) -> None:
                 pass
 
 
-def close_socket(sock: Optional[socket.socket]) -> None:
+def close_socket(sock: socket.socket | None) -> None:
     if sock is None:
         return
     try:
@@ -46,7 +45,7 @@ def close_socket(sock: Optional[socket.socket]) -> None:
 
 
 def handle_client(client: socket.socket, addr, target_host: str, target_port: int) -> None:
-    upstream: Optional[socket.socket] = None
+    upstream: socket.socket | None = None
     try:
         upstream = socket.create_connection((target_host, target_port), timeout=10)
         client.settimeout(None)
@@ -75,6 +74,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if os.getenv("ESP_SERVER_STOP_FILE"):
+        from app.runtime import stop_event as watch_stop
+        watch_stop(stop_event.set)
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
 
@@ -94,7 +96,7 @@ def main() -> int:
         while not stop_event.is_set():
             try:
                 client, addr = server.accept()
-            except socket.timeout:
+            except TimeoutError:
                 continue
             thread = threading.Thread(
                 target=handle_client,

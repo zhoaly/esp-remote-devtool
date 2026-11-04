@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import shutil
 import uuid
-from pathlib import Path
 
 from app.builders.files import remove_managed_path
 from app.core.config import Settings
@@ -62,10 +61,10 @@ class JobService:
             JobStatus.INTERRUPTED,
         }:
             raise ConflictError("invalid_job_transition", "Only failed, canceled, or interrupted jobs can be retried")
-        if original.upload_path and not Path(original.upload_path).is_file():
+        if original.upload_path and not self.settings.resolve_path(original.upload_path).is_file():
             raise ConflictError("retry_source_missing", "The original upload is no longer available")
         if original.source_mode == SourceMode.WORKSPACE.value:
-            workspace = Path(str(original.request_json.get("workspace_path", ""))).expanduser()
+            workspace = self.settings.resolve_path(str(original.request_json.get("workspace_path", "")))
             if not workspace.is_dir():
                 raise ConflictError("retry_source_missing", "The configured workspace is no longer available")
 
@@ -74,18 +73,18 @@ class JobService:
         upload_path = original.upload_path
         if original.upload_path:
             suffix = "_lvgl" if original.kind == JobKind.LVGL.value else ""
-            workspace_path = str(self.settings.workspace_dir / f"{new_id}{suffix}")
+            workspace_path = self.settings.stored_path(self.settings.workspace_dir / f"{new_id}{suffix}")
             upload_suffix = "_lvgl.zip" if original.kind == JobKind.LVGL.value else ".zip"
             copied_upload = self.settings.upload_dir / f"{new_id}{upload_suffix}"
-            shutil.copy2(original.upload_path, copied_upload)
-            upload_path = str(copied_upload)
+            shutil.copy2(self.settings.resolve_path(original.upload_path), copied_upload)
+            upload_path = self.settings.stored_path(copied_upload)
         try:
             record = self.jobs.create(
                 kind=JobKind(original.kind),
                 source_mode=original.source_mode,
                 project_name=original.project_name,
                 request_json=dict(original.request_json),
-                log_path=str(self.settings.log_dir / f"{new_id}.log"),
+                log_path=self.settings.stored_path(self.settings.log_dir / f"{new_id}.log"),
                 upload_path=upload_path,
                 workspace_path=workspace_path,
                 retry_of_job_id=original.id,
@@ -93,13 +92,13 @@ class JobService:
             )
         except Exception:
             if upload_path and upload_path != original.upload_path:
-                Path(upload_path).unlink(missing_ok=True)
+                self.settings.resolve_path(upload_path).unlink(missing_ok=True)
             raise
         return self.to_response(record)
 
     def read_log(self, job_id: str, offset: int, limit: int) -> LogChunkResponse:
         record = self.jobs.get(job_id)
-        path = Path(record.log_path)
+        path = self.settings.resolve_path(record.log_path)
         if not path.exists():
             return LogChunkResponse(
                 content="",
@@ -119,7 +118,7 @@ class JobService:
 
     def artifact_download(self, artifact_id: str) -> FileDownload:
         artifact = self.artifacts.get(artifact_id)
-        path = Path(artifact.path)
+        path = self.settings.resolve_path(artifact.path)
         if not path.is_file():
             raise NotFoundError("artifact_not_found", "Artifact file not found")
         return FileDownload(path, artifact.media_type, artifact.filename)
@@ -259,6 +258,6 @@ class RetentionService:
             if not value:
                 continue
             try:
-                remove_managed_path(Path(value), roots)
-            except RuntimeError:
+                remove_managed_path(self.settings.resolve_path(value), roots)
+            except (RuntimeError, ValueError):
                 continue

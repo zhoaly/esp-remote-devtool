@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
-from pathlib import Path
 from urllib.parse import urlencode
 
 from app.builders.files import is_managed_path, remove_managed_path, sha256_file
@@ -50,9 +49,15 @@ class OtaService:
                 "Version must be greater than the current channel version unless force=true",
             )
 
-        app_path = Path(str(result.get("_ota_app_path", ""))).resolve()
+        if not result.get("_ota_app_path"):
+            raise AppError("ota_binary_missing", "Application binary is unavailable", status_code=404)
+        app_path = self.settings.resolve_path(str(result["_ota_app_path"]))
+        workspace = job.request_json.get("workspace_path")
+        allowed_roots = (self.settings.workspace_dir,)
+        if workspace:
+            allowed_roots += (self.settings.resolve_path(str(workspace)),)
         if not app_path.is_file() or not is_managed_path(
-            app_path, (self.settings.workspace_dir, Path(str(job.request_json.get("workspace_path", "/__none__"))).resolve())
+            app_path, allowed_roots
         ):
             raise AppError("ota_binary_missing", "Application binary is unavailable", status_code=404)
         size = app_path.stat().st_size
@@ -71,7 +76,7 @@ class OtaService:
             job_id=job.id,
             kind="ota_firmware",
             filename="app.bin",
-            path=str(firmware_path),
+            path=self.settings.stored_path(firmware_path),
             media_type="application/octet-stream",
             size=size,
             sha256=digest,
@@ -153,7 +158,7 @@ class OtaService:
     def firmware_download(self, release_id: str) -> FileDownload:
         release = self.releases.get(release_id)
         artifact = self.artifacts.get(release.artifact_id)
-        path = Path(artifact.path)
+        path = self.settings.resolve_path(artifact.path)
         if not path.is_file():
             raise AppError("ota_firmware_not_found", "OTA firmware not found", status_code=404)
         return FileDownload(path, "application/octet-stream", "app.bin")

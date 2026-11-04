@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, inspect
 
 def test_alembic_upgrades_empty_database(tmp_path: Path, monkeypatch) -> None:
     server_dir = Path(__file__).resolve().parents[1]
-    base_dir = tmp_path / "server"
+    base_dir = tmp_path / "server with spaces 100%"
     base_dir.mkdir()
     monkeypatch.setenv("ESP_SERVER_BASE_DIR", str(base_dir))
     get_settings.cache_clear()

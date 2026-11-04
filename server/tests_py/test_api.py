@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import json
 import zipfile
-from pathlib import Path
 
 from app.domain.jobs import JobKind, JobStage, JobStatus, SourceMode
 from app.main import create_app
@@ -56,8 +55,8 @@ def test_v2_upload_cancel_retry_and_v1_removal(settings, database) -> None:
             original_record = JobRepository(session).get(job["id"])
             retry_record = JobRepository(session).get(retried.json()["id"])
             assert retry_record.upload_path != original_record.upload_path
-            assert Path(retry_record.upload_path or "").read_bytes() == Path(
-                original_record.upload_path or ""
+            assert settings.resolve_path(retry_record.upload_path).read_bytes() == settings.resolve_path(
+                original_record.upload_path
             ).read_bytes()
 
 
@@ -145,7 +144,7 @@ def test_incremental_log_response(settings, database) -> None:
                 "target": "esp32s3",
             },
         ).json()
-        (settings.log_dir / f"{created['id']}.log").write_text("first\nsecond\n", encoding="utf-8")
+        (settings.log_dir / f"{created['id']}.log").write_bytes(b"first\nsecond\n")
         first = client.get(f"/api/v2/jobs/{created['id']}/logs?offset=0&limit=6").json()
         second = client.get(
             f"/api/v2/jobs/{created['id']}/logs?offset={first['next_offset']}&limit=100"

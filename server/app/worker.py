@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import fcntl
 import logging
 import signal
-import time
-from pathlib import Path
+
+from filelock import FileLock, Timeout
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.runtime import stop_event
 from app.services.worker import BuildWorker
 from app.storage.database import create_database_engine, create_session_factory
 
@@ -20,32 +20,36 @@ def run() -> None:
     settings.ensure_directories()
     engine = create_database_engine(settings)
     worker = BuildWorker(settings, create_session_factory(engine))
-    should_stop = False
+    stopping = stop_event(worker.request_stop)
 
     def stop(_signum: int, _frame: object) -> None:
-        nonlocal should_stop
-        should_stop = True
+        stopping.set()
         worker.request_stop()
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
-    lock_path = Path(settings.worker_lock_path)
+    if hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, stop)
+    lock_path = settings.worker_lock_path
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with lock_path.open("a+") as lock:
-        try:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise SystemExit("Another build worker is already running") from exc
-
+    lock = FileLock(lock_path, timeout=0)
+    try:
+        lock.acquire()
+    except Timeout as exc:
+        raise SystemExit("Another build worker is already running") from exc
+    try:
         interrupted = worker.recover()
         if interrupted:
             LOGGER.warning("Marked %s unfinished job(s) as interrupted", interrupted)
         LOGGER.info("Persistent build worker started")
-        while not should_stop:
+        while not stopping.is_set():
             if not worker.run_once():
-                time.sleep(settings.worker_poll_seconds)
+                stopping.wait(settings.worker_poll_seconds)
         LOGGER.info("Persistent build worker stopped")
+    finally:
+        engine.dispose()
+        lock.release()
 
 
 if __name__ == "__main__":

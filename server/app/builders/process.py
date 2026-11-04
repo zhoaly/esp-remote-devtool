@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import os
 import queue
-import signal
 import subprocess
 import threading
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
+
+from app.builders.docker import docker_environment, docker_executable
+from app.core.processes import own_process_tree, popen_options, release_process_tree, terminate_tree
 
 
 class BuildCanceled(RuntimeError):
@@ -31,9 +32,11 @@ class ProcessRunner:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         lines: queue.Queue[str | None] = queue.Queue()
 
-        with log_path.open("a", encoding="utf-8") as log:
+        with log_path.open("a", encoding="utf-8", newline="\n") as log:
             log.write("\n========== RUN COMMAND ==========\n")
-            log.write(" ".join(command) + "\n")
+            # Proxy environment arguments may contain credentials.
+            display = ["<proxy>" if "proxy=" in item.lower() else item for item in command]
+            log.write(" ".join(display) + "\n")
             log.write("=================================\n")
             log.flush()
 
@@ -45,8 +48,11 @@ class ProcessRunner:
                 encoding="utf-8",
                 errors="replace",
                 bufsize=1,
-                start_new_session=True,
+                stdin=subprocess.DEVNULL,
+                env=docker_environment() if container_name else None,
+                **popen_options(),
             )
+            own_process_tree(process)
             assert process.stdout is not None
 
             def read_output() -> None:
@@ -73,10 +79,10 @@ class ProcessRunner:
                     except queue.Empty:
                         pass
 
-                    if process.poll() is None and cancel_requested():
+                    if cancel_requested():
                         self._terminate(process, container_name)
                         raise BuildCanceled("Build canceled")
-                    if process.poll() is None and time.monotonic() - started > timeout_seconds:
+                    if time.monotonic() - started > timeout_seconds:
                         self._terminate(process, container_name)
                         raise BuildTimedOut(f"Build timed out after {timeout_seconds} seconds")
 
@@ -86,34 +92,28 @@ class ProcessRunner:
             finally:
                 if process.poll() is None:
                     self._terminate(process, container_name)
+                if container_name:
+                    self.cleanup_container(container_name)
+                release_process_tree(process)
                 reader.join(timeout=2)
+                process.stdout.close()
 
     @staticmethod
     def _terminate(process: subprocess.Popen[str], container_name: str | None) -> None:
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
-            process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait(timeout=5)
         if container_name:
             ProcessRunner.cleanup_container(container_name)
+        terminate_tree(process)
 
     @staticmethod
     def cleanup_container(container_name: str) -> None:
         try:
             subprocess.run(
-                ["docker", "rm", "-f", container_name],
+                [docker_executable(), "rm", "-f", container_name],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,
                 timeout=15,
+                env=docker_environment(),
             )
         except (OSError, subprocess.TimeoutExpired):
             pass

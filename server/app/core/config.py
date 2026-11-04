@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 SERVER_DIR = Path(__file__).resolve().parents[2]
 
@@ -33,9 +33,6 @@ class Settings:
     config_dir: Path
     database_path: Path
     worker_lock_path: Path
-    build_script: Path
-    package_script: Path
-    lvgl_build_script: Path
 
     default_project_name: str
     default_idf_image: str
@@ -77,6 +74,28 @@ class Settings:
     def home_tools_config(self) -> Path:
         return self.config_dir / "home_tools.json"
 
+    def stored_path(self, path: Path) -> str:
+        """Managed paths are portable; explicitly configured external paths stay absolute."""
+        resolved = path.expanduser().resolve()
+        try:
+            return resolved.relative_to(self.data_dir.resolve()).as_posix()
+        except ValueError:
+            return str(resolved)
+
+    def resolve_path(self, value: str) -> Path:
+        if not value:
+            raise ValueError("Stored path is empty")
+        path = Path(value).expanduser()
+        if path.is_absolute():
+            return path.resolve()  # Read pre-upgrade native absolute paths.
+        if PureWindowsPath(value).drive or PurePosixPath(value).is_absolute():
+            raise ValueError("Foreign absolute path; run manage.py relocate-data before use")
+        root = self.data_dir.resolve()
+        path = (root / path).resolve()
+        if path != root and root not in path.parents:
+            raise ValueError("Stored path escapes the data directory")
+        return path
+
     def ensure_directories(self) -> None:
         for directory in (
             self.data_dir,
@@ -93,7 +112,7 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     base_dir = Path(os.getenv("ESP_SERVER_BASE_DIR", SERVER_DIR)).expanduser().resolve()
-    data_dir = base_dir / "data"
+    data_dir = Path(os.getenv("ESP_SERVER_DATA_DIR", base_dir / "data")).expanduser().resolve()
     allowed_images = tuple(
         image.strip()
         for image in os.getenv(
@@ -120,9 +139,6 @@ def get_settings() -> Settings:
         config_dir=base_dir / "config",
         database_path=data_dir / "server.db",
         worker_lock_path=data_dir / "worker.lock",
-        build_script=base_dir / "scripts" / "build_uploaded_project.sh",
-        package_script=base_dir / "scripts" / "package_firmware.sh",
-        lvgl_build_script=base_dir / "scripts" / "build_lvgl_wasm_project.sh",
         default_project_name=os.getenv("ESP_DEFAULT_PROJECT_NAME", "ESP32_S3_wifi_ble_hub"),
         default_idf_image=os.getenv("ESP_DEFAULT_IDF_IMAGE", "espressif/idf:v6.0.1"),
         default_target=os.getenv("ESP_DEFAULT_TARGET", "esp32s3"),
@@ -131,7 +147,9 @@ def get_settings() -> Settings:
         max_upload_size=max_upload_mb * 1024 * 1024,
         max_build_records=_env_int("ESP_MAX_BUILD_RECORDS", 100),
         max_archive_entries=_env_int("ESP_MAX_ARCHIVE_ENTRIES", 20_000),
-        max_archive_uncompressed_size=_env_int("ESP_MAX_ARCHIVE_UNCOMPRESSED_MB", 1024) * 1024 * 1024,
+        max_archive_uncompressed_size=_env_int("ESP_MAX_ARCHIVE_UNCOMPRESSED_MB", 1024)
+        * 1024
+        * 1024,
         max_archive_file_size=_env_int("ESP_MAX_ARCHIVE_FILE_MB", 256) * 1024 * 1024,
         ota_app_partition_size=_env_int("ESP_OTA_APP_PARTITION_SIZE", 6 * 1024 * 1024),
         ota_public_base_url=os.getenv("ESP_OTA_PUBLIC_BASE_URL", "").strip().rstrip("/"),

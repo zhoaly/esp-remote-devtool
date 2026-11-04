@@ -79,12 +79,14 @@ class WorkspaceService:
                 result.append(value.strip())
         return result
 
-    @staticmethod
-    def resolved_path(config: dict[str, Any]) -> str:
+    def resolved_path(self, config: dict[str, Any]) -> str:
         value = config.get("path")
         if not isinstance(value, str) or not value.strip():
             raise AppError("invalid_workspace_config", "Workspace path is missing", status_code=500)
-        path = Path(value).expanduser().resolve()
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            path = self.settings.base_dir / path
+        path = path.resolve()
         if not path.is_dir():
             raise AppError("workspace_unavailable", "Configured workspace is unavailable", status_code=503)
         return str(path)

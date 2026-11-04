@@ -16,7 +16,7 @@ A web-based ESP-IDF remote build and local flash tool.
 ## Repository Layout
 
 ```text
-server/       Linux remote build service and web UI
+server/       Cross-platform remote build service and web UI
 local-agent/  Windows upload and flash helper
 docs/         Deployment, usage, and troubleshooting notes
 release/      Release output placeholder
@@ -30,14 +30,18 @@ The browser talks to the remote API for job management and to the local Windows 
 
 ### Server
 
-```bash
-cd server
-./install_server.sh
-cp .env.example .env
-./start_server.sh
+```text
+python server/manage.py install
+python server/manage.py doctor
+python server/manage.py start
 ```
 
-`start_server.sh` runs `alembic upgrade head`, then starts both the API and worker. Python 3.10 or newer is required for the server.
+Ubuntu, macOS and Windows use the same entry point. Python 3.10+ and a running
+Linux Docker engine are required. Copy `server/.env.example` to `server/.env`
+to customize settings; it is optional for defaults. `start` migrates the database
+before starting the API and worker. `python server/manage.py stop` stops them
+gracefully. See [server deployment](docs/server_deploy.md) for OS startup,
+proxies and data relocation. The Local Agent remains Windows-only.
 
 ### Local Agent
 
