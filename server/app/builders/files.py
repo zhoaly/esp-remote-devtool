@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import shutil
 from pathlib import Path
@@ -58,3 +59,59 @@ def find_lvgl_project_root(workspace: Path) -> Path:
     if not candidates:
         raise RuntimeError("LVGL CMake project root not found")
     return min(candidates, key=lambda item: item[0])[1]
+
+
+_WEB_BUILD_NAMES = {
+    "CMakeFiles",
+    "_deps",
+    ".git",
+    "CMakeCache.txt",
+    "Makefile",
+    "compile_commands.json",
+    "build.ninja",
+    ".ninja_deps",
+    ".ninja_log",
+}
+_WEB_BUILD_SUFFIXES = {".o", ".obj", ".a", ".lib", ".bc", ".cmake", ".log", ".pc"}
+
+
+def _runtime_entry(path: Path) -> bool:
+    return (
+        not path.is_symlink()
+        and path.name not in _WEB_BUILD_NAMES
+        and path.suffix not in _WEB_BUILD_SUFFIXES
+    )
+
+
+def stage_web_preview(build_dir: Path, output: Path) -> None:
+    """Copy the runnable preview, preserving assets but excluding compiler state."""
+    if build_dir.is_symlink():
+        raise RuntimeError("Refusing to stage a linked WebAssembly build directory")
+    candidates = [build_dir, *(build_dir / name for name in ("bin", "dist", "src"))]
+    root = next(
+        (p for p in candidates if (p / "index.html").is_file() and not p.is_symlink()), None
+    )
+    if root is None:
+        for directory, folders, files in os.walk(build_dir, followlinks=False):
+            path = Path(directory)
+            folders[:] = sorted(name for name in folders if _runtime_entry(path / name))
+            if len(path.relative_to(build_dir).parts) >= 4:
+                folders.clear()
+            if "index.html" in files and not (path / "index.html").is_symlink():
+                root = path
+                break
+    if root is None:
+        raise RuntimeError("LVGL preview index.html not found")
+    output.mkdir(parents=True, exist_ok=True)
+    for directory, folders, files in os.walk(root, followlinks=False):
+        path = Path(directory)
+        folders[:] = [name for name in folders if _runtime_entry(path / name)]
+        for name in files:
+            source = path / name
+            if not _runtime_entry(source):
+                continue
+            target = output / source.relative_to(root)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+    if not (output / "index.html").is_file():
+        raise RuntimeError("LVGL preview index.html is not a regular file")

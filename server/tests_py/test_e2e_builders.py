@@ -26,9 +26,11 @@ for index, arg in enumerate(args):
         mounts[fields["target"]] = pathlib.Path(fields["source"])
 project = mounts["/project"]
 (project / "docker-arguments.json").write_text(json.dumps(args), encoding="utf-8")
-if "/out" in mounts:
-    (mounts["/out"] / "index.html").write_text("<html>preview</html>", encoding="utf-8")
-    (mounts["/out"] / "index.wasm").write_bytes(b"wasm")
+if any(arg.startswith("LVGL_SIM_WIDTH=") for arg in args):
+    output = project / "build_web"
+    output.mkdir()
+    (output / "index.html").write_text("<html>preview</html>", encoding="utf-8")
+    (output / "index.wasm").write_bytes(b"wasm")
 else:
     build = project / "build"
     (build / "bootloader").mkdir(parents=True)

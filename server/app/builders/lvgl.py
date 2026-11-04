@@ -6,7 +6,7 @@ from pathlib import Path
 from app.builders.archive import safe_extract_zip
 from app.builders.base import ArtifactSpec, BuildContext, BuildOutput
 from app.builders.docker import bind_mount, run_command
-from app.builders.files import find_lvgl_project_root, slug_name
+from app.builders.files import find_lvgl_project_root, slug_name, stage_web_preview
 from app.builders.lvgl_scaffold import load_lvgl_ui_manifest, prepare_lvgl_ui_scaffold
 from app.domain.jobs import JobStage, SourceMode
 
@@ -15,13 +15,6 @@ set -euo pipefail
 rm -rf build_web
 emcmake cmake -S . -B build_web -DLVGL_SIM_WIDTH="$LVGL_SIM_WIDTH" -DLVGL_SIM_HEIGHT="$LVGL_SIM_HEIGHT"
 cmake --build build_web -j"$(nproc)"
-for candidate in build_web build_web/bin build_web/dist build_web/src; do
-    if [ -f "$candidate/index.html" ]; then cp -a "$candidate"/. /out/; exit 0; fi
-done
-found_index="$(find build_web -maxdepth 4 -type f -name index.html -print -quit)"
-test -n "$found_index"
-cp -a "$(dirname "$found_index")"/. /out/
-test -f /out/index.html
 """
 
 
@@ -63,7 +56,6 @@ class LvglBuilder:
         preview_dir.mkdir(parents=True, exist_ok=True)
         container_name = f"lvgl-build-{job.id}"
         args = run_command(container_name, project_dir)
-        args += bind_mount(preview_dir, "/out")
         args += [
             "-e",
             f"LVGL_SIM_WIDTH={request['width']}",
@@ -98,10 +90,8 @@ class LvglBuilder:
             cancel_requested=context.cancel_requested,
             container_name=container_name,
         )
-        if not (preview_dir / "index.html").is_file():
-            raise RuntimeError("LVGL preview index.html not found")
-
         context.update_stage(JobStage.PACKAGING, "Packaging LVGL preview")
+        stage_web_preview(project_dir / "build_web", preview_dir)
         archive_base = context.settings.artifact_dir / (
             f"{slug_name(job.project_name, 'lvgl_project')}_{job.id}_lvgl_preview"
         )
