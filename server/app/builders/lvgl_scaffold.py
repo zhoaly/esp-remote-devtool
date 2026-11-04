@@ -197,7 +197,7 @@ if(LVGL_UPSTREAM_SOURCE_DIR AND EXISTS "${LVGL_UPSTREAM_SOURCE_DIR}/demos")
     target_include_directories(index PRIVATE "${LVGL_UPSTREAM_SOURCE_DIR}/demos")
 endif()
 ''' if demo_sources else ""
-    local_source = "/lvgl_source" if settings.lvgl_source_dir else ""
+    local_source = "/opt/lvgl_include/lvgl" if settings.lvgl_source_dir else ""
 
     (web_project / "CMakeLists.txt").write_text(
         f'''cmake_minimum_required(VERSION 3.20)
@@ -218,10 +218,12 @@ if(LVGL_LOCAL_SOURCE_DIR AND EXISTS "${{LVGL_LOCAL_SOURCE_DIR}}/CMakeLists.txt")
     add_subdirectory("${{LVGL_LOCAL_SOURCE_DIR}}" lvgl)
 else()
     include(FetchContent)
-    FetchContent_Declare(lvgl GIT_REPOSITORY {_quote(settings.lvgl_git_repo)} GIT_TAG {_quote(settings.lvgl_git_ref)} GIT_SHALLOW TRUE)
+    FetchContent_Declare(lvgl GIT_REPOSITORY {_quote(settings.lvgl_git_repo)} GIT_TAG {_quote(settings.lvgl_git_ref)} GIT_SHALLOW TRUE SOURCE_DIR "${{CMAKE_CURRENT_BINARY_DIR}}/_deps/lvgl")
     FetchContent_MakeAvailable(lvgl)
     set(LVGL_UPSTREAM_SOURCE_DIR "${{lvgl_SOURCE_DIR}}")
 endif()
+get_filename_component(LVGL_NAMESPACE_INCLUDE_DIR "${{LVGL_UPSTREAM_SOURCE_DIR}}" DIRECTORY)
+target_include_directories(lvgl PUBLIC "${{LVGL_NAMESPACE_INCLUDE_DIR}}")
 set(UI_SOURCES
 {source_lines}
 )

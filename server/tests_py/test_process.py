@@ -8,6 +8,21 @@ import pytest
 from app.builders.process import BuildCanceled, BuildTimedOut, ProcessRunner
 
 
+def assert_process_exited(pid: int) -> None:
+    # Windows Job Object termination completes asynchronously. A process can
+    # disappear between pid_exists() and status(), which is also a successful exit.
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            process = psutil.Process(pid)
+            if not process.is_running() or process.status() == psutil.STATUS_ZOMBIE:
+                return
+        except psutil.NoSuchProcess:
+            return
+        time.sleep(0.02)
+    pytest.fail(f"Child process {pid} is still running after cancellation")
+
+
 def test_process_runner_cancels_process_group(tmp_path) -> None:
     started = time.monotonic()
     with pytest.raises(BuildCanceled):
@@ -51,7 +66,7 @@ def test_cancel_reaps_child_process_and_cleans_container(tmp_path, monkeypatch) 
             container_name="esp-build-cancel",
         )
     pid = int(pidfile.read_text())
-    assert not psutil.pid_exists(pid) or psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
+    assert_process_exited(pid)
     assert "esp-build-cancel" in cleaned
 
 
@@ -85,4 +100,4 @@ def test_timeout_reaps_descendant_after_parent_exits(tmp_path):
             cancel_requested=lambda: False,
         )
     pid = int(pidfile.read_text())
-    assert not psutil.pid_exists(pid) or psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
+    assert_process_exited(pid)

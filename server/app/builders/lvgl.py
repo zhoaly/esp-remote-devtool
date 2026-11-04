@@ -76,6 +76,9 @@ class LvglBuilder:
             if not (source / "CMakeLists.txt").is_file():
                 raise RuntimeError("LVGL_SOURCE_DIR is invalid")
             args += bind_mount(source, "/lvgl_source", readonly=True)
+            # Keep the legacy mount for uploaded CMake projects, and expose a
+            # directory literally named lvgl for namespaced UI includes.
+            args += bind_mount(source, "/opt/lvgl_include/lvgl", readonly=True)
         if settings.lvgl_sdl2_port_dir:
             port = Path(settings.lvgl_sdl2_port_dir).expanduser().resolve()
             if not (port / "include/SDL.h").is_file():
