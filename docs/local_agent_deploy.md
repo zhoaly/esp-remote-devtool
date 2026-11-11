@@ -32,3 +32,23 @@ The source workflow continues to read `local-agent/config.json`. Settings saved 
 the packaged tray application take precedence from LocalAppData.
 
 For V2, `remote_build_url` must end with `/api/v2/builds/esp/upload`. The Agent derives the LVGL upload and server information URLs from the same origin.
+
+## Use several build servers
+
+In `%LOCALAPPDATA%\ESPRemoteBuildAgent\config.json`, set `remote_build_servers` to a JSON
+object mapping each browser origin to its V2 ESP upload URL. Use the scheme, host, and
+port as shown in the browser address bar, without a path or trailing slash. Register
+each IP address or DNS name you use to open a server. The Agent allows those origins
+and routes ESP and LVGL local-path uploads to the server for the current tab.
+
+`remote_build_url` is the default for command-line requests without an Origin header
+and the server opened by the tray shortcut. Once a server map is configured, browser
+build requests must come from a mapped origin or the default server's origin. The
+legacy `allowed_origins` setting alone does not route uploads.
+
+After editing the JSON, choose **重试 / 重启 Agent** from the tray. To check the destination
+without uploading a project, run the following with the origin you want to verify:
+
+```powershell
+curl.exe -H "Origin: https://another-server.example" http://127.0.0.1:8765/
+```

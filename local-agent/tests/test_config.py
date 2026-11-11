@@ -32,6 +32,7 @@ class ConfigTests(unittest.TestCase):
                     }
                 )
                 settings = config.load_settings()
+                payload = json.loads(config_path.read_text(encoding="utf-8"))
 
             self.assertEqual(saved_path, config_path.resolve())
             self.assertEqual(
@@ -41,8 +42,18 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(settings.host, "127.0.0.1")
             self.assertEqual(settings.port, 8765)
             self.assertIn("https://build.example", settings.allowed_origins)
-            payload = json.loads(config_path.read_text(encoding="utf-8"))
             self.assertNotIn("allowed_origins", payload)
+
+    def test_tray_save_preserves_remote_build_servers(self) -> None:
+        servers = {
+            "https://second.example": "https://second.example/api/v2/builds/esp/upload"
+        }
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            config_path = Path(temporary_dir) / "config.json"
+            config_path.write_text(json.dumps({"remote_build_servers": servers}), encoding="utf-8")
+            with patch.dict(os.environ, {"ESP_LOCAL_AGENT_CONFIG_PATH": str(config_path)}):
+                config.save_user_settings(config.settings_to_user_dict(config.load_settings()))
+                self.assertEqual(config.load_settings().remote_build_servers, servers)
 
     def test_invalid_remote_url_is_rejected(self) -> None:
         with self.assertRaises(ValueError):

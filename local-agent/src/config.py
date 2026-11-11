@@ -27,6 +27,7 @@ class AgentSettings:
     config_path: Path | None = None
     data_dir: Path | None = None
     log_dir: Path | None = None
+    remote_build_servers: dict[str, str] = field(default_factory=dict)
 
 
 def is_frozen() -> bool:
@@ -141,6 +142,27 @@ def _derive_allowed_origins(remote_build_url: str) -> list[str]:
     return sorted(origins)
 
 
+def _load_remote_build_servers(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        raise ValueError("remote_build_servers must map browser origins to upload URLs")
+
+    servers = {}
+    for origin, upload_url in value.items():
+        parsed = urlparse(origin)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or "*" in origin
+            or parsed.username is not None
+            or origin != f"{parsed.scheme}://{parsed.netloc}"
+        ):
+            raise ValueError(f"Invalid browser origin in remote_build_servers: {origin}")
+        if not isinstance(upload_url, str):
+            raise ValueError(f"Upload URL for {origin} must be a string")
+        servers[origin] = validate_remote_build_url(upload_url)
+    return servers
+
+
 def load_settings() -> AgentSettings:
     source_path = _source_config_path()
     config = _load_json(source_path)
@@ -173,8 +195,13 @@ def load_settings() -> AgentSettings:
     )
 
     allowed_origins = config.get("allowed_origins")
+    remote_build_servers = _load_remote_build_servers(config.get("remote_build_servers", {}))
     if not isinstance(allowed_origins, list) or not allowed_origins:
-        allowed_origins = _derive_allowed_origins(remote_build_url)
+        allowed_origins = (
+            [derive_remote_origin(remote_build_url)]
+            if remote_build_servers
+            else _derive_allowed_origins(remote_build_url)
+        )
 
     data_dir = get_app_data_dir()
     return AgentSettings(
@@ -196,6 +223,7 @@ def load_settings() -> AgentSettings:
         config_path=source_path if source_path.exists() else get_user_config_path(),
         data_dir=data_dir,
         log_dir=data_dir / "logs",
+        remote_build_servers=remote_build_servers,
     )
 
 
@@ -220,11 +248,12 @@ def save_user_settings(values: dict[str, str]) -> Path:
         if not value:
             raise ValueError(f"{key} must not be empty")
 
+    config_path = get_user_config_path()
     payload = {
+        **_load_json(_source_config_path()),
         "remote_build_url": remote_build_url,
         **required,
     }
-    config_path = get_user_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = config_path.with_suffix(".json.tmp")
     temporary_path.write_text(

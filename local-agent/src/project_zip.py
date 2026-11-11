@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import zipfile
 from pathlib import Path
 from typing import Any
+
+
+def _new_zip_path(project_dir: Path, suffix: str) -> Path:
+    fd, filename = tempfile.mkstemp(prefix=f"{project_dir.name}_", suffix=suffix)
+    os.close(fd)
+    return Path(filename)
 
 
 def should_exclude(
@@ -54,11 +61,7 @@ def create_project_zip(
     exclude_dir_names: set[str],
     exclude_file_suffixes: set[str],
 ) -> Path:
-    temp_dir = Path(tempfile.gettempdir())
-    zip_path = temp_dir / f"{project_dir.name}_source_upload.zip"
-
-    if zip_path.exists():
-        zip_path.unlink()
+    zip_path = _new_zip_path(project_dir, "_source_upload.zip")
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in project_dir.rglob("*"):
@@ -135,11 +138,7 @@ def create_lvgl_ui_package_zip(
         "entry_header": entry_header,
     }
 
-    temp_dir = Path(tempfile.gettempdir())
-    zip_path = temp_dir / f"{project_dir.name}_lvgl_ui_upload.zip"
-
-    if zip_path.exists():
-        zip_path.unlink()
+    zip_path = _new_zip_path(project_dir, "_lvgl_ui_upload.zip")
 
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("lvgl_sim.json", json.dumps(manifest, ensure_ascii=False, indent=2))

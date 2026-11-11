@@ -1,9 +1,9 @@
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import requests
-from config import AgentSettings, load_settings
-from fastapi import FastAPI, HTTPException
+from config import AgentSettings, derive_remote_origin, load_settings
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from flasher import flash_firmware
 from project_zip import (
@@ -60,21 +60,36 @@ def create_app(settings: AgentSettings) -> FastAPI:
     app = FastAPI(title="ESP Local Upload Agent", version="0.2.0")
     app.state.agent_settings = settings
 
+    default_origin = derive_remote_origin(settings.remote_build_url)
+    build_servers = settings.remote_build_servers
+    allowed_origins = settings.allowed_origins
+    if build_servers:
+        allowed_origins = sorted({*allowed_origins, default_origin, *build_servers})
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.allowed_origins,
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
         allow_private_network=True,
     )
 
+    def resolve_build_url(origin: Annotated[str | None, Header()] = None) -> str:
+        if origin is None or not build_servers:
+            return settings.remote_build_url
+        if origin in build_servers:
+            return build_servers[origin]
+        if origin == default_origin:
+            return settings.remote_build_url
+        raise HTTPException(status_code=403, detail="Build server is not configured for this origin")
+
     @app.get("/")
-    def index() -> dict[str, str]:
+    def index(origin: Annotated[str | None, Header()] = None) -> dict[str, str]:
         return {
             "name": "ESP Local Upload Agent",
             "status": "running",
-            "remote_build_url": settings.remote_build_url,
+            "remote_build_url": resolve_build_url(origin),
         }
 
     @app.get("/api/serial_ports")
@@ -102,7 +117,9 @@ def create_app(settings: AgentSettings) -> FastAPI:
             ) from exc
 
     @app.post("/api/build_from_path")
-    def build_from_path(req: BuildFromPathRequest) -> dict[str, Any]:
+    def build_from_path(
+        req: BuildFromPathRequest, remote_build_url: Annotated[str, Depends(resolve_build_url)]
+    ) -> dict[str, Any]:
         project_dir = Path(req.project_path).expanduser().resolve()
 
         try:
@@ -113,7 +130,7 @@ def create_app(settings: AgentSettings) -> FastAPI:
                 settings.exclude_file_suffixes,
             )
             return upload_project_zip(
-                settings.remote_build_url,
+                remote_build_url,
                 str(zip_path),
                 req.project_name,
                 req.idf_image,
@@ -139,7 +156,9 @@ def create_app(settings: AgentSettings) -> FastAPI:
             ) from exc
 
     @app.post("/api/lvgl/build_from_path")
-    def build_lvgl_from_path(req: BuildLvglFromPathRequest) -> dict[str, Any]:
+    def build_lvgl_from_path(
+        req: BuildLvglFromPathRequest, remote_build_url: Annotated[str, Depends(resolve_build_url)]
+    ) -> dict[str, Any]:
         project_dir = Path(req.project_path).expanduser().resolve()
 
         try:
@@ -150,7 +169,7 @@ def create_app(settings: AgentSettings) -> FastAPI:
                 settings.exclude_file_suffixes,
             )
             return upload_lvgl_project_zip(
-                settings.remote_build_url,
+                remote_build_url,
                 str(zip_path),
                 req.project_name,
                 req.width,
@@ -178,6 +197,7 @@ def create_app(settings: AgentSettings) -> FastAPI:
     @app.post("/api/lvgl/build_ui_from_path")
     def build_lvgl_ui_from_path(
         req: BuildLvglUiFromPathRequest,
+        remote_build_url: Annotated[str, Depends(resolve_build_url)],
     ) -> dict[str, Any]:
         project_dir = Path(req.project_path).expanduser().resolve()
 
@@ -195,7 +215,7 @@ def create_app(settings: AgentSettings) -> FastAPI:
                 settings.exclude_file_suffixes,
             )
             return upload_lvgl_ui_package_zip(
-                settings.remote_build_url,
+                remote_build_url,
                 str(zip_path),
                 req.project_name,
                 req.width,
